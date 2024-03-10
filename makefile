@@ -1,0 +1,23 @@
+
+SDK_PATH = /home/leesum/Documents/huawei_soft2024/LinuxRelease.part01/LinuxRelease
+JUGDE_PROG = $(SDK_PATH)/PreliminaryJudge
+MAP_PATH = $(SDK_PATH)/maps
+REPLAYER_PROG = $(SDK_PATH)/replayer/CodeCraft_2024_Replay.x86_64
+
+
+MAP_SEL = map1.txt
+TARGET = $(PWD)/build/main
+
+all: 
+	if [ ! -d "build" ]; then mkdir build && cd build && cmake .. && cd ..; fi
+	make -C build
+
+
+run:all
+	$(JUGDE_PROG) $(TARGET) -m $(MAP_PATH)/$(MAP_SEL)
+
+replay:all
+	$(REPLAYER_PROG)
+
+clean:
+	rm -rf build

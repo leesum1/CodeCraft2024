@@ -6,7 +6,7 @@
 #include "robot.h"
 #include "ship.h"
 #include <array>
-#include <optional>
+#include <memory>
 #include <vector>
 
 #define SHIP_NUM 5
@@ -27,16 +27,16 @@ private:
   };
 
 public:
-  std::optional<GameMap> game_map_original; // 初始地图
+  std::shared_ptr<GameMap> game_map_original; // 初始地图
 
   /* 每帧更新的信息*/
-  std::array<Berth, BERTH_NUM> berths;             // 靠泊点信息
-  std::array<Ship, SHIP_NUM> ships;                // 船只信息
-  std::array<Robot, ROBOT_NUM> robots;             // 机器人信息
-  std::array<Goods, NEW_GOODS_NUM> new_goods_list; // 新增货物信息
-  int new_goods_num;                               // 新增货物数量
-  int cur_cycle;                                   // 当前周期
-  int cur_money;                                   // 当前金钱
+  std::array<Berth, BERTH_NUM> berths;              // 靠泊点信息
+  std::array<Ship, SHIP_NUM> ships;                 // 船只信息
+  std::array<Robot, ROBOT_NUM> robots;              // 机器人信息
+  std::array<GoodsC, NEW_GOODS_NUM> new_goods_list; // 新增货物信息
+  int new_goods_num = 0;                              // 新增货物数量
+  int cur_cycle = 0;                                  // 当前周期
+  int cur_money = 0;                                  // 当前金钱
 
   /* 每帧的输出指令 */
   std::vector<Command> commands;

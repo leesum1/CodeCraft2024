@@ -33,7 +33,7 @@ void log_raw(const char *fmt, ...) {
 }
 
 void log_write(int level, const char *file, int line, const char *fmt, ...) {
-  if (level < log_level || !log_file.has_value()) {
+  if (level > log_level || !log_file.has_value()) {
     return;
   }
   static char buf[1000];

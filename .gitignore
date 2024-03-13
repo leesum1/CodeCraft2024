@@ -1,5 +1,7 @@
-log.txt
+*.txt
+*.log
 replay/
 maps/
 build/
 .*/
+cmake-build-debug/

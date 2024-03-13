@@ -5,7 +5,7 @@ MAP_PATH = $(SDK_PATH)/maps
 REPLAYER_PROG = $(SDK_PATH)/replayer/CodeCraft_2024_Replay.x86_64
 
 
-MAP_SEL = map1.txt
+MAP_SEL = map2.txt
 TARGET = $(PWD)/build/main
 
 all: 
@@ -14,10 +14,16 @@ all:
 
 
 run:all
-	$(JUGDE_PROG) $(TARGET) -m $(MAP_PATH)/$(MAP_SEL)
+	$(JUGDE_PROG)    -m $(MAP_PATH)/$(MAP_SEL)  $(TARGET)
+
+test:all
+	$(TARGET)
 
 replay:all
 	$(REPLAYER_PROG)
+
+gdb:all
+	gdb $(TARGET)
 
 clean:
 	rm -rf build

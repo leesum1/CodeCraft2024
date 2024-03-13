@@ -1,9 +1,8 @@
 #include <bits/stdc++.h>
 #include <cstdio>
 
-#include "game_map.h"
-#include "io_layer.h"
 #include "log.h"
+#include "mananger.h"
 
 const int n = 200;
 const int robot_num = 10;
@@ -80,29 +79,25 @@ int Input() {
 char scanf_buf[2048];
 
 int main() {
-  log_init("log.txt", 0);
+  log_init("log.txt", 6);
+  log_fatal("test");
 
-  auto io_layer = IoLayer();
+  auto m = Manager();
+  m.init_game();
+  static int goods_count = 0;
 
-  io_layer.init();
-
-  log_info("io_layer finished");
-  io_layer.game_map_original->print_map();
-
-  for (int zhen = 1; zhen <= 15000; zhen++) {
-
-    io_layer.input_cycle();
-
-    for (int i = 0; i < ROBOT_NUM; i++)
-      io_layer.robot_move(i, static_cast<RobotDrirection>(rand() % 4));
-
-    if (zhen == 10) {
-      for (int i = 0; i < SHIP_NUM; i++)
-        io_layer.ship(i, i);
+  try {
+    for (int zhen = 1; zhen <= 15000; zhen++) {
+      m.run_game();
+      goods_count += m.io_layer.new_goods_num;
     }
-
-    io_layer.output_cycle();
+  } catch (const std::exception &e) {
+    log_fatal("exception:%s", e.what());
   }
 
+  log_info("goods_count:%d\n", goods_count);
+
+  // #include "test.h"
+  //   a_star_test2();
   return 0;
 }

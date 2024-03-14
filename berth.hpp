@@ -1,6 +1,6 @@
 #pragma once
 
-#include "point.h"
+#include "point.hpp"
 struct Berth {
   Point pos;
   int transport_time;

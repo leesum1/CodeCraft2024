@@ -2,12 +2,16 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 
 struct Point {
   int x;
   int y;
-  Point(){};
+  Point() {
+    x = -1;
+    y = -1;
+  };
   Point(int x, int y) {
     this->x = x;
     this->y = y;
@@ -28,7 +32,7 @@ struct Point {
 struct PointCost {
   Point pos;
   int cost;
-  PointCost() {};
+  PointCost(){};
   PointCost(Point pos, int cost) : pos(pos), cost(cost) {}
 
   friend bool operator<(PointCost f1, PointCost f2) {
@@ -41,8 +45,9 @@ template <> struct hash<Point> {
   std::size_t operator()(const Point &p) const {
     using std::hash;
     using std::size_t;
+    int new_val = (p.x << 8) | p.y;
 
-    return ((hash<int>()(p.x) ^ (hash<int>()(p.y) << 1)) >> 1);
+    return hash<int>()(new_val);
   }
 };
 } // namespace std

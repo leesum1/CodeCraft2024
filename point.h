@@ -25,11 +25,22 @@ struct Point {
   }
 };
 
+struct PointCost {
+  Point pos;
+  int cost;
+  PointCost() {};
+  PointCost(Point pos, int cost) : pos(pos), cost(cost) {}
+
+  friend bool operator<(PointCost f1, PointCost f2) {
+    return f1.cost > f2.cost;
+  }
+};
+
 namespace std {
 template <> struct hash<Point> {
   std::size_t operator()(const Point &p) const {
-    using std::size_t;
     using std::hash;
+    using std::size_t;
 
     return ((hash<int>()(p.x) ^ (hash<int>()(p.y) << 1)) >> 1);
   }

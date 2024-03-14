@@ -3,10 +3,13 @@
 #include "berth.h"
 #include "game_map.h"
 #include "goods.h"
+#include "point.h"
 #include "robot.h"
 #include "ship.h"
 #include <array>
 #include <memory>
+#include <optional>
+#include <unordered_map>
 #include <vector>
 
 #define SHIP_NUM 5
@@ -34,9 +37,15 @@ public:
   std::array<Ship, SHIP_NUM> ships;                 // 船只信息
   std::array<Robot, ROBOT_NUM> robots;              // 机器人信息
   std::array<GoodsC, NEW_GOODS_NUM> new_goods_list; // 新增货物信息
-  int new_goods_num = 0;                              // 新增货物数量
-  int cur_cycle = 0;                                  // 当前周期
-  int cur_money = 0;                                  // 当前金钱
+  int new_goods_num = 0;                            // 新增货物数量
+  int cur_cycle = 0;                                // 当前周期
+  int cur_money = 0;                                // 当前金钱
+  std::array<std::unordered_map<Point, PointCost>, 10> berths_come_from;
+
+  int total_goods_num = 0;   // 总货物数量
+  int total_goods_money = 0; // 总货物价值
+  int goted_goods_num = 0;   // 已经获取的货物数量
+  int goted_goods_money = 0; // 已经获取的货物价值
 
   /* 每帧的输出指令 */
   std::vector<Command> commands;
@@ -44,6 +53,8 @@ public:
   explicit IoLayer();
   bool init_game_map();
   void init_berths();
+  void berths_come_from_init();
+  std::optional< std::vector<Point>> get_berth_path(int berth_id, Point from);
   void init_ships();
   void init();
 

@@ -9,6 +9,15 @@
 #include <vector>
 enum RobotDrirection { RIGHT, LEFT, UP, DOWN };
 
+enum RobotFSM {
+  IDLE,
+  SELECT_GOODS,
+  GO_TO_GOODS,
+  SELECT_BERTH,
+  GO_TO_BERTH,
+  DEAD
+};
+
 struct Robot {
   int goods, x, y, status;
   Robot() {}
@@ -39,7 +48,7 @@ public:
   bool had_goods; // 机器人是否有货物
   int status;     // 机器人状态
 
-  int fsm_status = 0; // 机器人状态机状态
+  RobotFSM fsm_status = IDLE; // 机器人状态机状态
   std::optional<GoodsC> target_goods = std::nullopt;
   std::optional<Berth> target_berth = std::nullopt;
   std::vector<Point> path; // 机器人路径

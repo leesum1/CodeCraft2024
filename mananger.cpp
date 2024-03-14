@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <chrono>
 #include <deque>
 #include <list>
 #include <set>
@@ -58,11 +59,13 @@ void Manager::go_to_goods(RobotC &robot) {
   }
 
   auto get_goods_func = [&]() {
-    // io_layer.robot_get(robot.id);
+    io_layer.robot_get(robot.id);
 
     robot.target_goods = std::nullopt;
     robot.path_valid = false;
     goods_list[robot.target_goods->pos].end_cycle = io_layer.cur_cycle - 10;
+    io_layer.goted_goods_num++;
+    io_layer.goted_goods_money += robot.target_goods->money;
   };
 
   if (robot.path.empty() && robot.pos == robot.target_goods->pos) {
@@ -91,7 +94,36 @@ void Manager::go_to_goods(RobotC &robot) {
   }
 }
 
+void Manager::find_new_berth(RobotC &robot) {
+  if (robot.fsm_status != RobotFSM::SELECT_BERTH) {
+    log_fatal("robot [%d] fsm status not select_berth", robot.id);
+    assert(false);
+  }
+  if (robot.target_berth.has_value()) {
+    log_fatal("robot [%d] target_berth not empty", robot.id);
+    assert(false);
+  }
+  if (!robot.target_goods.has_value() || robot.had_goods) {
+    log_fatal("robot [%d] target_goods empty, target_goods %d, had_goods %d",
+              robot.id, robot.target_goods.has_value(), robot.had_goods);
+    assert(false);
+  }
+  if (robot.path_valid || !robot.path.empty() ||
+      !robot.collision_path.empty()) {
+    log_fatal("robot [%d] path valid or not empty", robot.id);
+    log_fatal("robot [%d] path_valid %d, path size %d, collision_path size %d",
+              robot.id, robot.path_valid, robot.path.size(),
+              robot.collision_path.size());
+    assert(false);
+  }
+}
+
 void Manager::find_new_goods(RobotC &robot) {
+  // if (robot.fsm_status != RobotFSM::SELECT_GOODS) {
+  //   log_fatal("robot fsm status not select_goods");
+  //   assert(false);
+  // }
+
   if (robot.target_goods.has_value()) {
     log_fatal("robot target_goods not empty");
     assert(false);
@@ -251,6 +283,43 @@ void Manager::run_game() {
   // 碰撞检测
   collision_detect();
 
+  robot_move();
+
+  // 删除 goods_list 中已经消失的货物
+  for (auto it = goods_list.begin(); it != goods_list.end();) {
+    if (it->second.end_cycle < io_layer.cur_cycle) {
+      it = goods_list.erase(it);
+    } else {
+      it++;
+    }
+  }
+
+  auto start = std::chrono::high_resolution_clock::now();
+
+  std::for_each(robots.begin(), robots.end(), [&](auto &robot) {
+    for (int i = 0; i < BERTH_NUM; i++) {
+      auto berth_i_path = io_layer.get_berth_path(i, robot.pos);
+
+      if (berth_i_path.has_value()) {
+
+        int cost = io_layer.berths_come_from[i][robot.pos].cost;
+        log_trace("robot[%d] to berth[%d] path size:%d, cost%d", robot.id, i,
+                  berth_i_path.value().size(),cost);
+
+      } else {
+        log_trace("robot[%d] to berth[%d] no path", robot.id, i);
+      }
+    }
+  });
+  auto end = std::chrono::high_resolution_clock::now();
+  log_info("berth search time:%d ms",
+           std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+               .count());
+
+  io_layer.output_cycle();
+}
+
+void Manager::robot_move() {
   // 机器人移动
   std::for_each(robots.begin(), robots.end(), [&](auto &robot) {
     if (robot.next_pos.has_value()) {
@@ -323,22 +392,7 @@ void Manager::run_game() {
     robot.next_pos = std::nullopt;
     robot.next_type = RobotC::RobotNextPointType::EMPTY;
   });
-
-  // 删除 goods_list 中已经消失的货物
-  for (auto it = goods_list.begin(); it != goods_list.end();) {
-    if (it->second.end_cycle < io_layer.cur_cycle) {
-      it = goods_list.erase(it);
-    } else {
-      it++;
-    }
-  }
-
-
-
-  io_layer.output_cycle();
 }
-
-//
 
 RobotDrirection Manager::calc_direction(Point from, Point to) {
 
@@ -468,281 +522,3 @@ void Manager::collision_detect() {
     };
   }
 }
-
-// void Manager::robot_ctrl_fsm(RobotC &robot) {
-//   bool had_goods = robot.had_goods;
-//   bool status_ok = robot.status == 1;
-//   auto cur_map = io_layer.game_map_original;
-//   auto robot_pos = robot.pos;
-
-//   log_trace("robot id:%d, status:%d, had_goods:%d, fsm_status:%d", robot.id,
-//             robot.status, robot.had_goods, robot.fsm_status);
-//   auto a_path = AStarPath(robot_pos, Point(100, 150), cur_map);
-//   a_path.search_path();
-
-//   // switch (robot.fsm_status) {
-//   // case RobotFSM::IDLE:
-//   //   if (status_ok) {
-//   //     if (had_goods) {
-//   //       robot.fsm_status = RobotFSM::SELECT_BERTH;
-//   //     } else {
-//   //       robot.fsm_status = RobotFSM::SELECT_GOODS;
-//   //     }
-//   //     robot_ctrl_fsm(robot);
-//   //   }
-//   //   break;
-//   // case RobotFSM::SELECT_GOODS: {
-//   //   // 计算所有货物的价值
-//   //   std::vector<int> goods_values;
-//   //   for (auto &goods : goods_list) {
-//   //     goods_values.push_back(goods.calc_goods_value(robot_pos));
-//   //   }
-
-//   //   // 选择价值最大的货物, 并删除货物
-//   //   auto max_goods_iter =
-//   //       std::max_element(goods_list.begin(), goods_list.end(),
-//   //                        [&robot_pos](GoodsC &a, GoodsC &b) {
-//   //                          auto a_value = a.calc_goods_value(robot_pos);
-//   //                          auto b_value = b.calc_goods_value(robot_pos);
-//   //                          return a_value < b_value;
-//   //                        });
-
-//   //   if (max_goods_iter == goods_list.end()) {
-//   //     robot.fsm_status = RobotFSM::DEAD;
-//   //     break;
-//   //   }
-
-//   //   auto max_goods = GoodsC(*max_goods_iter);
-
-//   //   // 计算机器人到货物的路径
-//   //   auto goods_pos = max_goods.pos;
-
-//   //   auto a_path = AStarPath(robot_pos, goods_pos, cur_map);
-
-//   //   a_path.search_path();
-//   //   auto serched_path = a_path.get_path();
-//   //   if (serched_path.has_value()) {
-//   //     // a_path.print_path();
-//   //     robot.fsm_status = RobotFSM::GO_TO_GOODS;
-//   //     robot.target_goods = max_goods;
-//   //     goods_list.erase(max_goods_iter);
-//   //     // robot_ctrl_fsm(robot);
-//   //   } else {
-//   //     robot.fsm_status = RobotFSM::DEAD;
-//   //   }
-//   //   break;
-//   // }
-//   // case RobotFSM::GO_TO_GOODS:
-//   //   if (status_ok && robot.target_goods.has_value() && !robot.had_goods) {
-//   //     // 计算机器人到货物的路径
-//   //     auto goods_pos = robot.target_goods->pos;
-//   //     auto a_path = AStarPath(robot_pos, goods_pos, cur_map);
-//   //     a_path.search_path();
-//   //     auto serched_path = a_path.get_path();
-//   //     if (serched_path.has_value() && !serched_path.value().empty()) {
-//   //       auto next_point = serched_path.value().back();
-//   //       io_layer.robot_move(robot.id, calc_direction(robot_pos,
-//   //       next_point)); serched_path.value().pop_back(); if
-//   //       (serched_path.value().empty()) {
-//   //         log_info("robot get goods, robot id:%d", robot.id);
-//   //         io_layer.robot_get(robot.id);
-//   //         robot.fsm_status = RobotFSM::SELECT_BERTH;
-//   //       }
-//   //     } else {
-//   //       robot.fsm_status = RobotFSM::DEAD;
-//   //     }
-//   //   } else {
-//   //     robot.fsm_status = RobotFSM::DEAD;
-//   //   }
-//   //   break;
-//   // case RobotFSM::SELECT_BERTH: {
-//   //   if (status_ok && had_goods && !robot.target_berth.has_value()) {
-
-//   //     // 货物已经拿到了
-//   //     robot.target_goods = std::nullopt;
-
-//   //     // 所有泊位
-//   //     std::optional<Berth> selected_berth = std::nullopt;
-
-//   //     int selected_berth_dis = 20000;
-//   //     for (auto &berth : berth_list) {
-//   //       // 计算机器人到泊位的路径
-//   //       auto berth_pos = berth.pos;
-//   //       auto a_path = AStarPath(robot_pos, berth_pos, cur_map);
-//   //       a_path.search_path();
-//   //       auto serched_path = a_path.get_path();
-//   //       if (serched_path.has_value()) {
-//   //         if (serched_path.value().size() < selected_berth_dis) {
-//   //           selected_berth_dis = serched_path.value().size();
-//   //           selected_berth = berth;
-//   //         }
-//   //       }
-//   //     }
-//   //     // 选择最近的泊位
-//   //     if (selected_berth.has_value()) {
-//   //       robot.target_berth = selected_berth;
-//   //       robot.fsm_status = RobotFSM::GO_TO_BERTH;
-//   //       robot_ctrl_fsm(robot);
-//   //     } else {
-//   //       robot.target_berth = std::nullopt;
-//   //       robot.fsm_status = RobotFSM::DEAD;
-//   //     }
-
-//   //   } else {
-//   //     robot.fsm_status = RobotFSM::DEAD;
-//   //   }
-//   //   break;
-//   // }
-//   // case RobotFSM::GO_TO_BERTH:
-//   //   if (robot.target_berth.has_value() && robot.had_goods && status_ok) {
-
-//   //     // 计算机器人到泊位的路径
-//   //     auto target_pos = robot.target_berth->pos;
-//   //     auto a_path = AStarPath(robot_pos, target_pos, cur_map);
-//   //     a_path.search_path();
-//   //     auto serched_path = a_path.get_path();
-//   //     if (serched_path.has_value() && !serched_path.value().empty()) {
-//   //       auto next_point = serched_path.value().back();
-//   //       io_layer.robot_move(robot.id, calc_direction(robot_pos,
-//   //       next_point)); serched_path.value().pop_back(); if
-//   //       (serched_path.value().empty()) {
-//   //         io_layer.robot_pull(robot.id);
-//   //         robot.fsm_status = RobotFSM::DEAD;
-//   //       }
-//   //     } else {
-//   //       robot.fsm_status = RobotFSM::DEAD;
-//   //     }
-//   //   } else {
-//   //     robot.fsm_status = RobotFSM::DEAD;
-//   //   }
-//   //   break;
-
-//   // case RobotFSM::DEAD:
-//   //   if (status_ok) {
-//   //     if (robot.had_goods && robot.target_berth.has_value()) {
-//   //       robot.fsm_status = RobotFSM::GO_TO_BERTH;
-//   //       robot.target_goods = std::nullopt;
-
-//   //     } else if (robot.had_goods && !robot.target_berth.has_value()) {
-//   //       robot.fsm_status = RobotFSM::SELECT_BERTH;
-//   //       robot.target_goods = std::nullopt;
-//   //     } else if (!robot.had_goods) {
-//   //       robot.fsm_status = RobotFSM::SELECT_GOODS;
-//   //       robot.target_berth = std::nullopt;
-//   //       robot.target_goods = std::nullopt;
-//   //     } else {
-//   //       log_fatal("robot fsm error");
-//   //     }
-//   //     // robot_ctrl_fsm(robot);
-//   //   }
-//   //   break;
-//   // default:
-//   //   break;
-//   // }
-// }
-
-// void Manager::bfs_search(RobotC &robot) {
-//   auto cur_map = io_layer.game_map_original;
-//   Point robot_pos = robot.pos;
-//   Point target_pos = Point(-1, -1);
-
-//   auto robot_id = robot.id;
-//   auto status_OK = robot.status == 1;
-//   int cur_zhen = io_layer.cur_cycle;
-//   static std::deque<Point> q;
-//   static std::unordered_map<Point, Point> came_from;
-
-//   came_from.clear();
-//   q.clear();
-
-//   came_from[robot_pos] = Point(-1, -1);
-
-//   int dis = 0;
-
-//   q.push_back(robot_pos);
-
-//   while (!q.empty()) {
-//     int level_size = q.size();
-
-//     for (int i = 0; i < level_size; i++) {
-//       auto current = q.front();
-//       q.pop_front();
-
-//       if (dis > 30) {
-//         break;
-//       }
-
-//       // 判断是否找到目标, 并且货物还没有消失
-//       if (goods_list.find(current) != goods_list.end() &&
-//           goods_list[current].end_cycle > cur_zhen) {
-
-//         if (robot.target_goods.has_value() &&
-//             robot.target_goods->pos == current) {
-//           target_pos = current;
-//           // 中途不换货物
-//           break;
-//         } else if (robot.target_goods.has_value() &&
-//                    robot.target_goods->pos != current &&
-//                    !goods_list.at(current).be_selected) {
-//           // // 中途更换货物
-//           // goods_list[current].be_selected = true;
-
-//           // goods_list[robot.target_goods->pos].be_selected = false;
-//           // robot.target_goods = goods_list[current];
-
-//           // target_pos = current;
-//           break;
-//         } else if (!robot.target_goods.has_value() &&
-//                    !goods_list.at(current).be_selected) {
-//           // 第一次选择货物
-//           goods_list[current].be_selected = true;
-//           robot.target_goods = goods_list[current];
-//           target_pos = current;
-//           break;
-//         }
-//       }
-
-//       // 将顶点的下一层没有访问过的节点加入队列
-//       for (auto &next : cur_map->neighbors(current)) {
-//         if (came_from.find(next) == came_from.end()) {
-//           q.push_back(next);
-//           came_from[next] = current;
-//         }
-//       }
-//     }
-//     // 每一层遍历完毕，距离加一
-//     dis++;
-//   }
-
-//   // find the path
-//   Point current_point = target_pos;
-//   std::vector<Point> cur_path;
-//   bool found_path = true;
-//   while (current_point != robot_pos) {
-//     cur_path.push_back(current_point);
-//     try {
-//       current_point = came_from.at(current_point);
-//     } catch (const std::out_of_range &e) {
-//       // this->graph = nullptr;
-//       log_warn("no path found from (%d, %d) to (%d, %d)", robot_pos.x,
-//                robot_pos.y, target_pos.x, target_pos.y);
-//       found_path = false;
-//       // print_path();
-//       return;
-//     }
-//   }
-//   if (found_path) {
-
-//     if (!cur_path.empty()) {
-//       auto direction = calc_direction(robot_pos, cur_path.back());
-//       io_layer.robot_move(robot_id, direction);
-//     }
-
-//     if (cur_path.size() == 1) {
-//       // io_layer.robot_get(robot_id);
-//       robot.target_goods = std::nullopt;
-//       log_info("goods get, pos: %d, %d", target_pos.x, target_pos.y);
-//       goods_list[target_pos].end_cycle = cur_zhen - 10;
-//     }
-//   }
-// }

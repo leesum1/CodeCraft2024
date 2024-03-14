@@ -4,17 +4,30 @@
 
 #include "io_layer.h"
 
+#include <algorithm>
+#include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <locale>
+#include <queue>
 
 #include "log.h"
+#include "point.h"
+#include <chrono>
+#include <utility>
 
 IoLayer::IoLayer() { this->game_map_original = std::make_shared<GameMap>(); }
 
 void IoLayer::init() {
+  auto start = std::chrono::high_resolution_clock::now();
   init_game_map();
   init_berths();
   init_ships();
+  berths_come_from_init();
+  auto end = std::chrono::high_resolution_clock::now();
+  log_info("init time:%d ms",
+           std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+               .count());
   char okk[100];
   scanf("%s", okk);
   printf("OK\n");
@@ -40,6 +53,64 @@ bool IoLayer::init_game_map() {
 
   log_info("Game map initialized");
   return true;
+}
+
+std::optional<std::vector<Point>> IoLayer::get_berth_path(int berth_id,
+                                                          Point from) {
+  if (berth_id < 0 || berth_id >= BERTH_NUM) {
+    log_fatal("berth id out of range, expect 0~%d, actual:%d", BERTH_NUM,
+              berth_id);
+    assert(false);
+  }
+
+  // find the path
+  Point berth_pos =
+      Point(berths[berth_id].pos.x + 1, berths[berth_id].pos.y + 1);
+  Point current_point = from;
+  std::vector<Point> cur_path;
+  while (current_point != berth_pos) {
+    cur_path.push_back(current_point);
+    try {
+      current_point = berths_come_from[berth_id].at(current_point).pos;
+    } catch (const std::out_of_range &e) {
+      log_fatal("berth[%d] come from map not found, from point:(%d,%d)",
+                berth_id, from.x, from.y);
+      return std::nullopt;
+    }
+  }
+
+  std::reverse(cur_path.begin(), cur_path.end());
+  return cur_path;
+}
+
+void IoLayer::berths_come_from_init() {
+  for (int i = 0; i < BERTH_NUM; i++) {
+    Point start = Point(berths[i].pos.x + 1, berths[i].pos.y + 1);
+    std::queue<Point> q;
+    q.push(start);
+    int search_lvl = 0;
+    berths_come_from[i][start] = PointCost(start, search_lvl);
+    while (!q.empty()) {
+      int level_size = q.size();
+      for (int j = 0; j < level_size; j++) {
+        Point cur = q.front();
+        q.pop();
+        for (const auto &next : game_map_original->neighbors(cur)) {
+          if (berths_come_from[i].find(next) == berths_come_from[i].end()) {
+            berths_come_from[i].emplace(next, PointCost(cur, search_lvl));
+            q.push(next);
+          }
+        }
+      }
+      search_lvl++;
+    }
+  }
+
+  log_info("berths_come_from initialized");
+
+  for (int i = 0; i < BERTH_NUM; i++) {
+    log_info("berth[%d] come from map size: %d", i, berths_come_from[i].size());
+  }
 }
 
 void IoLayer::init_berths() {
@@ -87,7 +158,9 @@ void IoLayer::input_cycle() {
 
     // log_trace("new goods x:%d,y:%d,money:%d", new_goods_list[i].pos.x,
     //           new_goods_list[i].pos.y, new_goods_list[i].money);
+    total_goods_money += new_goods_list[i].money;
   }
+  total_goods_num += new_goods_num;
 
   // 机器人状态
   for (int i = 0; i < ROBOT_NUM; i++) {

@@ -8,13 +8,15 @@
 struct Point {
   int x;
   int y;
-  Point() {
-    x = -1;
-    y = -1;
-  };
-  Point(int x, int y) {
-    this->x = x;
-    this->y = y;
+  Point() : x(-1), y(-1) {}
+  Point(int x, int y) : x(x), y(y) {}
+
+  Point &operator=(const Point &other) {
+    if (this != &other) {
+      x = other.x;
+      y = other.y;
+    }
+    return *this;
   }
 
   // 重载比较运算符==

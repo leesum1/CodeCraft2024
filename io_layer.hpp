@@ -125,6 +125,8 @@ public:
     auto path =
         BFS::get_path(berth_pos, goal_pos, berths_come_from[berth_id], founded);
 
+    log_info("berth[%d] (%d,%d) to (%d,%d)", berth_id, berth_pos.x, berth_pos.y,
+             goal_pos.x, goal_pos.y);
     if (founded) {
       if (path.front() != from) {
         log_fatal("path.front() != from, path.front():(%d,%d), from:(%d,%d)",
@@ -250,7 +252,7 @@ public:
     if (!(abs(from.x - to.x) <= 1 && abs(from.y - to.y) <= 1 || from == to)) {
       log_trace("calc_direction err, from: (%d, %d), to: (%d, %d)", from.x,
                 from.y, to.x, to.y);
-      // assert(false);
+      assert(false);
     }
 
     if (from.x == to.x) {

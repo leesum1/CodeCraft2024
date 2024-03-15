@@ -48,8 +48,8 @@ public:
 
   std::vector<Point> neighbors(Point &pos) {
     std::vector<Point> result;
-    constexpr int dx[4] = {1, 0, -1, 0};
-    constexpr int dy[4] = {0, 1, 0, -1};
+    constexpr int dx[4] = {1, -1, 0, 0};
+    constexpr int dy[4] = {0, 0, 1, -1};
     for (int i = 0; i < 4; i++) {
       int nx = pos.x + dx[i];
       int ny = pos.y + dy[i];

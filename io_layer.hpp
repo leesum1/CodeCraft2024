@@ -168,13 +168,13 @@ public:
     // 读取新增货物信息
     scanf("%d", &new_goods_num);
     for (int i = 0; i < new_goods_num; i++) {
-      int x, y, money, end_cycle;
+      int x, y, money;
       scanf("%d%d%d", &x, &y, &money);
       new_goods_list[i].pos = Point(x, y);
       new_goods_list[i].money = money;
       new_goods_list[i].end_cycle = cur_cycle + 999;
       log_trace("new goods[%d]:(%d,%d),money:%d,end_cycle:%d", i, x, y, money,
-                end_cycle);
+                new_goods_list[i].end_cycle);
     }
     total_goods_num += new_goods_num;
 
@@ -248,10 +248,28 @@ public:
   }
   void go(int ship_id) { commands.push_back({GO, ship_id, 0}); }
 
+
+  bool is_valid_move(Point from, Point to) {
+    if (from.x < 0 || from.x >= 200 || from.y < 0 || from.y >= 200) {
+      log_trace("from(%d,%d) out of range", from.x, from.y);
+      return false;
+    }
+    if (to.x < 0 || to.x >= 200 || to.y < 0 || to.y >= 200) {
+      log_trace("to(%d,%d) out of range", to.x, to.y);
+      return false;
+    }
+    if (abs(from.x - to.x) + abs(from.y - to.y) != 1) {
+      log_trace("from(%d,%d) to(%d,%d) not valid", from.x, from.y, to.x, to.y);
+      return false;
+    }
+    return true;
+  }
+
   RobotDrirection calc_direction(Point from, Point to) {
-    if (!(abs(from.x - to.x) <= 1 && abs(from.y - to.y) <= 1 || from == to)) {
-      log_trace("calc_direction err, from: (%d, %d), to: (%d, %d)", from.x,
-                from.y, to.x, to.y);
+
+    // to 只能是 from 的上下左右，其余情况不合法
+    if (abs(from.x - to.x) + abs(from.y - to.y) != 1) {
+      log_fatal("from(%d,%d) to(%d,%d) not valid", from.x, from.y, to.x, to.y);
       assert(false);
     }
 

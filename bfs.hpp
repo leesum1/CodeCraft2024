@@ -100,8 +100,15 @@ public:
            const std::unordered_map<Point, PointCost> &come_from,
            bool &founded) {
     std::vector<Point> path;
-    Point cur = goal;
     founded = true;
+
+    if (start == goal) {
+      log_info("start == goal, no need to move");
+      founded = false;
+      return path;
+    }
+
+    Point cur = goal;
     while (cur != start) {
       path.push_back(cur);
       if (come_from.find(cur) == come_from.end()) {

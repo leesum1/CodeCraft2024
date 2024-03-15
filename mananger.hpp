@@ -163,9 +163,15 @@ public:
             auto new_path = BFS::get_path(robot_cur_pos, target_point,
                                           come_from_t, success);
             if (success) {
+
+              log_debug("robots_path_list before size:%d",
+                        robots_path_list[robot_id].size());
               // 在这里才能清空砍断的路径
-              if (robots_path_list.size() > skip_size) {
-                // 我们通过剪切法将这 10 个点绕过去了
+              if (robots_path_list[robot_id].size() >= skip_size) {
+                log_debug("robots_path_list before size:%d,skip_size:%d",
+                          robots_path_list[robot_id].size(), skip_size);
+                // 只去掉 skip_size - 1 个点,
+                // 因为最后一个点是目标点，在机器人命令移动后会去除
                 for (int i = 0; i < skip_size; i++) {
                   robots_path_list[robot_id].pop_back();
                 }
@@ -173,11 +179,13 @@ public:
                 // 不足 10 个点,直接清空路径
                 robots_path_list[robot_id].clear();
               }
+              log_debug("robots_path_list after size:%d",
+                        robots_path_list[robot_id].size());
 
               log_info("robot[%d] new path size:%d", robot_id, new_path.size());
-              for (const auto &p : new_path) {
-                // log_info("new (%d,%d) robots_path_list size:%d", p.x, p.y,
-                //          robots_path_list[robot_id].size());
+              for (const auto p : new_path) {
+                log_info("new (%d,%d) robots_path_list size:%d", p.x, p.y,
+                         robots_path_list[robot_id].size());
                 robots_path_list[robot_id].push_back(p);
               }
 
@@ -201,11 +209,12 @@ public:
 
               log_info("robot[%d] new path2 size:%d,success2:%d", robot_id,
                        path_last.size(), success2);
-              assert(success2);
+              // assert(success2);
 
               robots_path_list[robot_id] = path_last;
 
               if (path_last.empty()) {
+                log_info("robot[%d] new path not found, stop move", robot_id);
                 robots_next_pos_list.at(robot_id) = Point();
               } else {
                 robots_next_pos_list.at(robot_id) = path_last.back();
@@ -255,16 +264,41 @@ public:
       log_debug("robot[%d] check_collision end", robot_id);
     };
 
+    auto err_debug = [&](int robot_id) {
+      log_info(
+          "after control robot[%d] robot_cur_pos(%d,%d) robot_next_pos(%d,%d)",
+          robot_id, robots_cur_pos_list[robot_id].x,
+          robots_cur_pos_list[robot_id].y, robots_next_pos_list[robot_id].x,
+          robots_next_pos_list[robot_id].y);
+      if (!io_layer.is_valid_move(robots_cur_pos_list[robot_id],
+                                  robots_next_pos_list[robot_id])) {
+        log_trace("robot[%d] invalid move, path size", robot_id);
+        for (auto pos : robots_path_list[robot_id]) {
+          log_trace("robot[%d] path (%d,%d)", robot_id, pos.x, pos.y);
+        }
+      }
+    };
+
     for (int i = 0; i < 15000; i++) {
       io_layer.input_cycle();
 
+      // 清空下一步位置
       robots_next_pos_list.fill(Point());
+      // 获取机器人当前位置
       for (int i = 0; i < 10; i++) {
         robots_cur_pos_list[i] = io_layer.robots[i].pos;
       }
 
+      // 依次控制机器人
       for (int j = 0; j < 10; j++) {
         run_circ(j, berths_id_list[j], robots_path_list[j]);
+      }
+
+      for (int j = 0; j < 10; j++) {
+        err_debug(j);
+      }
+
+      for (int j = 0; j < 10; j++) {
         check_collision(j);
       }
 

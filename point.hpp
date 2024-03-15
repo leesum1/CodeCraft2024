@@ -6,6 +6,7 @@
 #include <functional>
 
 struct Point {
+
   int x;
   int y;
   Point() : x(-1), y(-1) {}
@@ -41,6 +42,8 @@ struct PointCost {
     return f1.cost > f2.cost;
   }
 };
+
+static const Point invalid_point;
 
 namespace std {
 template <> struct hash<Point> {

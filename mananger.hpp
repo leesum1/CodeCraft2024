@@ -128,137 +128,146 @@ public:
 
       // 将当前机器人与其他机器人进行碰撞检测
       for (int i = 0; i < ROBOT_NUM; i++) {
-        if (i != robot_id && robot_next_pos != Point()) {
+        if (i == robot_id) {
+          // 不需要检测自己
+          continue;
+        }
+        if (robot_next_pos == Point()) {
+          // 不动就不需要检测
+          log_trace("robot[%d] robot_next_pos is null, no need check_collision",
+                    robot_id);
+          continue;
+        }
 
-          // 检测是否会碰撞，当前机器人的下一步为其他机器人的位置或下一步
+        // 检测是否会碰撞，当前机器人的下一步为其他机器人的位置或下一步
 
-          // 检测是否会碰撞
-          if (robot_next_pos == robots_cur_pos_list[i] ||
-              robot_next_pos == robots_next_pos_list[i]) {
-            log_info("robot[%d] and robot[%d] collision", robot_id, i);
+        // 检测是否会碰撞
+        if (robot_next_pos == robots_cur_pos_list[i] ||
+            robot_next_pos == robots_next_pos_list[i]) {
+          log_info("robot[%d] and robot[%d] collision", robot_id, i);
 
-            // 这里仅仅只是选择一个点,不能清空路径
-            Point target_point = cut_path(robot_id, robots_path_list[robot_id]);
-            log_info("robot[%d] robot_cur_pos(%d,%d) new target point:(%d,%d)",
-                     robot_id, robot_cur_pos.x, robot_cur_pos.y, target_point.x,
-                     target_point.y);
+          // 这里仅仅只是选择一个点,不能清空路径
+          Point target_point = cut_path(robot_id, robots_path_list[robot_id]);
+          log_info("robot[%d] robot_cur_pos(%d,%d) new target point:(%d,%d)",
+                   robot_id, robot_cur_pos.x, robot_cur_pos.y, target_point.x,
+                   target_point.y);
 
-            auto goal_func = [&](Point p) { return p == target_point; };
-            auto heuristic_func = [&](Point n) {
-              return std::abs(n.x - target_point.x) +
-                     std::abs(n.y - target_point.y);
-            };
+          auto goal_func = [&](Point p) { return p == target_point; };
+          auto heuristic_func = [&](Point n) {
+            return std::abs(n.x - target_point.x) +
+                   std::abs(n.y - target_point.y);
+          };
 
-            // 剪切法
-            auto come_from_t = BFS::bfs_search(robot_cur_pos, goal_func,
-                                               is_barrier, find_neigh, 30);
+          // 剪切法
+          auto come_from_t = BFS::bfs_search(robot_cur_pos, goal_func,
+                                             is_barrier, find_neigh, 30);
 
-            // auto come_from_t =
-            //     BFS::astar_search(robot_cur_pos, target_point, is_barrier,
-            //                       heuristic_func, find_neigh);
+          // auto come_from_t =
+          //     BFS::astar_search(robot_cur_pos, target_point, is_barrier,
+          //                       heuristic_func, find_neigh);
 
-            log_info("robot[%d] come_from_t size:%d", robot_id,
-                     come_from_t.size());
-            bool success;
-            auto new_path = BFS::get_path(robot_cur_pos, target_point,
-                                          come_from_t, success);
-            if (success) {
+          log_info("robot[%d] come_from_t size:%d", robot_id,
+                   come_from_t.size());
+          bool success;
+          auto new_path =
+              BFS::get_path(robot_cur_pos, target_point, come_from_t, success);
+          if (success) {
 
-              log_debug("robots_path_list before size:%d",
-                        robots_path_list[robot_id].size());
-              // 在这里才能清空砍断的路径
-              if (robots_path_list[robot_id].size() >= skip_size) {
-                log_debug("robots_path_list before size:%d,skip_size:%d",
-                          robots_path_list[robot_id].size(), skip_size);
-                // 只去掉 skip_size - 1 个点,
-                // 因为最后一个点是目标点，在机器人命令移动后会去除
-                for (int i = 0; i < skip_size; i++) {
-                  robots_path_list[robot_id].pop_back();
-                }
-              } else {
-                // 不足 10 个点,直接清空路径
-                robots_path_list[robot_id].clear();
+            log_debug("robots_path_list before size:%d",
+                      robots_path_list[robot_id].size());
+            // 在这里才能清空砍断的路径
+            if (robots_path_list[robot_id].size() >= skip_size) {
+              log_debug("robots_path_list before size:%d,skip_size:%d",
+                        robots_path_list[robot_id].size(), skip_size);
+              // 只去掉 skip_size - 1 个点,
+              // 因为最后一个点是目标点，在机器人命令移动后会去除
+              for (int i = 0; i < skip_size; i++) {
+                robots_path_list[robot_id].pop_back();
               }
-              log_debug("robots_path_list after size:%d",
-                        robots_path_list[robot_id].size());
-
-              log_info("robot[%d] new path size:%d", robot_id, new_path.size());
-              for (const auto p : new_path) {
-                log_info("new (%d,%d) robots_path_list size:%d", p.x, p.y,
-                         robots_path_list[robot_id].size());
-                robots_path_list[robot_id].push_back(p);
-              }
-
-              log_info("robot[%d] new path size:%d", robot_id,
-                       robots_path_list[robot_id].size());
-              robots_next_pos_list.at(robot_id) =
-                  robots_path_list[robot_id].back();
             } else {
-              // 能不能再利用 BFS 的结果，找到一个路径，需要一个终点
-              // 需要另外的策略
-              // 1. 找不到路就停止 (在狭窄的地方会死锁)
-              // 2. 随便找块空地
-              auto max_point =
-                  std::max_element(come_from_t.begin(), come_from_t.end(),
-                                   [&](const auto &p1, const auto &p2) {
-                                     return p1.second.cost < p2.second.cost;
-                                   });
-              bool success2 = false;
-              std::vector<Point> path_last = BFS::get_path(
-                  robot_cur_pos, max_point->first, come_from_t, success2);
+              // 不足 10 个点,直接清空路径
+              robots_path_list[robot_id].clear();
+            }
+            log_debug("robots_path_list after size:%d",
+                      robots_path_list[robot_id].size());
 
-              log_info("robot[%d] new path2 size:%d,success2:%d", robot_id,
-                       path_last.size(), success2);
-              // assert(success2);
+            log_info("robot[%d] new path size:%d", robot_id, new_path.size());
+            for (const auto p : new_path) {
+              log_info("new (%d,%d) robots_path_list size:%d", p.x, p.y,
+                       robots_path_list[robot_id].size());
+              robots_path_list[robot_id].push_back(p);
+            }
 
-              robots_path_list[robot_id] = path_last;
+            log_info("robot[%d] new path size:%d", robot_id,
+                     robots_path_list[robot_id].size());
+            robots_next_pos_list.at(robot_id) =
+                robots_path_list[robot_id].back();
+          } else {
+            // 能不能再利用 BFS 的结果，找到一个路径，需要一个终点
+            // 需要另外的策略
+            // 1. 找不到路就停止 (在狭窄的地方会死锁)
+            // 2. 随便找块空地
+            auto max_point =
+                std::max_element(come_from_t.begin(), come_from_t.end(),
+                                 [&](const auto &p1, const auto &p2) {
+                                   return p1.second.cost < p2.second.cost;
+                                 });
+            bool success2 = false;
+            std::vector<Point> path_last = BFS::get_path(
+                robot_cur_pos, max_point->first, come_from_t, success2);
 
-              if (path_last.empty()) {
-                log_info("robot[%d] new path not found, stop move", robot_id);
-                robots_next_pos_list.at(robot_id) = Point();
-              } else {
-                robots_next_pos_list.at(robot_id) = path_last.back();
-              }
+            log_info("robot[%d] new path2 size:%d,success2:%d", robot_id,
+                     path_last.size(), success2);
+            // assert(success2);
 
-              /**
-              std::vector<Point> cur_neibores =
-                  io_layer.game_map.neighbors(robot_cur_pos);
-              log_debug("cur_robot_pos(%d,%d)", robot_cur_pos.x,
-                        robot_cur_pos.y);
+            robots_path_list[robot_id] = path_last;
 
-              std::vector<Point> empty_spaces;
-              for (auto &cur_neib : cur_neibores) {
-                {
-                  if (!is_barrier(cur_neib)) {
-                    empty_spaces.emplace_back(cur_neib);
-                  }
+            if (path_last.empty()) {
+              log_info("robot[%d] new path not found, stop move", robot_id);
+              robots_next_pos_list.at(robot_id) = Point();
+            } else {
+              robots_next_pos_list.at(robot_id) = path_last.back();
+            }
+
+            /**
+            std::vector<Point> cur_neibores =
+                io_layer.game_map.neighbors(robot_cur_pos);
+            log_debug("cur_robot_pos(%d,%d)", robot_cur_pos.x,
+                      robot_cur_pos.y);
+
+            std::vector<Point> empty_spaces;
+            for (auto &cur_neib : cur_neibores) {
+              {
+                if (!is_barrier(cur_neib)) {
+                  empty_spaces.emplace_back(cur_neib);
                 }
               }
+            }
+
+            // 去周围的一个空地上
+            if (!empty_spaces.empty()) {
+              auto &slected_point =
+                  empty_spaces.at(std::rand() % empty_spaces.size());
+              // 记录方便回溯
+              robots_path_list[robot_id].push_back(
+                  robot_cur_pos); // 需要回溯的位置
+              robots_path_list[robot_id].push_back(
+                  slected_point); // 下一次移动的位置, 在移动后会 pop 掉
 
               // 去周围的一个空地上
-              if (!empty_spaces.empty()) {
-                auto &slected_point =
-                    empty_spaces.at(std::rand() % empty_spaces.size());
-                // 记录方便回溯
-                robots_path_list[robot_id].push_back(
-                    robot_cur_pos); // 需要回溯的位置
-                robots_path_list[robot_id].push_back(
-                    slected_point); // 下一次移动的位置, 在移动后会 pop 掉
+              robots_next_pos_list.at(robot_id) = slected_point;
 
-                // 去周围的一个空地上
-                robots_next_pos_list.at(robot_id) = slected_point;
-
-                log_trace("cur_robot_pos(%d,%d),cur_neib(%d,%d)",
-                          robot_cur_pos.x, robot_cur_pos.y, slected_point.x,
-                          slected_point.y);
-              } else {
-                log_info("robot[%d] new path not found", robot_id);
-                robots_next_pos_list.at(robot_id) = Point();
-              }
-              **/
-              // assert(false);
+              log_trace("cur_robot_pos(%d,%d),cur_neib(%d,%d)",
+                        robot_cur_pos.x, robot_cur_pos.y, slected_point.x,
+                        slected_point.y);
+            } else {
+              log_info("robot[%d] new path not found", robot_id);
+              robots_next_pos_list.at(robot_id) = Point();
             }
+            **/
+            // assert(false);
           }
+          // }
         }
       }
       log_debug("robot[%d] check_collision end", robot_id);

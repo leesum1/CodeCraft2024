@@ -104,7 +104,7 @@ public:
           q.pop();
           for (const auto &next : game_map.neighbors(cur)) {
             if (berths_come_from[i].find(next) == berths_come_from[i].end()) {
-              berths_come_from[i].emplace(next, PointCost(cur, search_lvl));
+              berths_come_from[i][next] = PointCost(cur, search_lvl);
               q.push(next);
             }
           }
@@ -132,8 +132,8 @@ public:
     auto path =
         BFS::get_path(berth_pos, goal_pos, berths_come_from[berth_id], founded);
 
-    log_info("berth[%d] (%d,%d) to (%d,%d)", berth_id, P_ARG(berth_pos),
-             P_ARG(goal_pos));
+    log_info("berth[%d] (%d,%d) to (%d,%d) size:%d", berth_id, P_ARG(berth_pos),
+             P_ARG(goal_pos), path.size());
     if (founded) {
       if (path.front() != from) {
         log_fatal("path.front() != from, path.front():(%d,%d), from:(%d,%d)",
@@ -147,6 +147,14 @@ public:
 
     return path;
   }
+
+  void init_done() {
+    char okk[10];
+    scanf("%s", okk);
+    printf("OK\n");
+    fflush(stdout);
+  }
+
   void init_ships() {
     int ship_capacity;
     scanf("%d", &ship_capacity);
@@ -166,6 +174,7 @@ public:
     log_info("IoLayer init time:%d ms",
              std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
                  .count());
+    init_done();
   }
 
   void input_cycle() {
@@ -182,7 +191,7 @@ public:
       new_goods_list[i].end_cycle = cur_cycle + 999;
       log_trace("new goods[%d]:(%d,%d),money:%d,end_cycle:%d", i, x, y, money,
                 new_goods_list[i].end_cycle);
-      
+
       total_goods_money += money;
     }
     total_goods_num += new_goods_num;
@@ -299,8 +308,10 @@ public:
   //-----------------test----------------------------------
 
   void test_berths_come_from() {
+
     for (int i = 0; i < BERTH_NUM; i++) {
-      Point cur = Point(36, 173);
+      // (117,3) (36, 173);
+      Point cur = Point(117,3);
       bool founded = false;
       auto path = get_berth_path(i, cur, founded);
       if (founded) {

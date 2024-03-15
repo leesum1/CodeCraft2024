@@ -44,7 +44,7 @@ public:
     PosType type = get_pos_type(pos);
     return type == PosType::BARRIER || type == PosType::OCEAN;
   }
-  bool is_space(Point &pos) { return get_pos_type(pos) == PosType::SPACE; }
+  bool is_space(Point &pos) { return !is_barrier(pos); }
 
   std::vector<Point> neighbors(Point &pos) {
     std::vector<Point> result;

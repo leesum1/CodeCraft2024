@@ -9,6 +9,10 @@ public:
   int end_cycle; // 货物消失的周期
   bool be_selected = false;
 
+  bool is_disappeared(int cur_cycle) {
+    return (cur_cycle > end_cycle) || pos != invalid_point;
+  }
+
   Goods(Point pos, int money, int end_cycle)
       : pos(pos), money(money), end_cycle(end_cycle) {}
 
@@ -18,4 +22,12 @@ public:
   Goods(const Goods &other)
       : pos(other.pos), money(other.money), end_cycle(other.end_cycle) {}
   ~Goods() {}
+
+  bool operator==(const Goods &other) const {
+    return pos == other.pos && money == other.money &&
+           end_cycle == other.end_cycle && be_selected == other.be_selected;
+  }
+  bool operator!=(const Goods &other) const { return !(*this == other); }
 };
+
+const static Goods invalid_goods = Goods(Point(-1, -1), 0, 0);

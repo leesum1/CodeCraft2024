@@ -89,7 +89,7 @@ int main() {
 
     auto m = Manager();
     m.init_game();
-    m.test_berths1();
+    m.io_layer.test_berths_come_from();
 
   } catch (const std::exception &e) {
 

@@ -2,11 +2,9 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdint>
 #include <functional>
 
 struct Point {
-
   int x;
   int y;
   Point() : x(-1), y(-1) {}
@@ -43,8 +41,6 @@ struct PointCost {
   }
 };
 
-static const Point invalid_point;
-
 namespace std {
 template <> struct hash<Point> {
   std::size_t operator()(const Point &p) const {
@@ -66,3 +62,9 @@ struct PrioItem {
   }
   friend bool operator<(PrioItem f1, PrioItem f2) { return f1.cost > f2.cost; }
 };
+
+static const Point invalid_point;
+
+#define INVALID_POINT invalid_point
+
+#define P_ARG(p) (p).x, (p).y

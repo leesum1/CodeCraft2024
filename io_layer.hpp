@@ -60,6 +60,13 @@ public:
   explicit IoLayer() {}
   ~IoLayer(){};
 
+  void print_final_info() {
+    log_info("total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
+             "goted_goods_money:%d",
+             total_goods_num, total_goods_money, goted_goods_num,
+             goted_goods_money);
+  }
+
   bool init_game_map() {
     char c_buf[210] = {0};
     for (int i = 0; i < 200; i++) {
@@ -125,8 +132,8 @@ public:
     auto path =
         BFS::get_path(berth_pos, goal_pos, berths_come_from[berth_id], founded);
 
-    log_info("berth[%d] (%d,%d) to (%d,%d)", berth_id, berth_pos.x, berth_pos.y,
-             goal_pos.x, goal_pos.y);
+    log_info("berth[%d] (%d,%d) to (%d,%d)", berth_id, P_ARG(berth_pos),
+             P_ARG(goal_pos));
     if (founded) {
       if (path.front() != from) {
         log_fatal("path.front() != from, path.front():(%d,%d), from:(%d,%d)",
@@ -134,7 +141,7 @@ public:
         assert(false);
       }
     }
-    path.push_back(berth_pos);
+    path.emplace_back(berth_pos);
     std::reverse(path.begin(), path.end());
     path.pop_back();
 
@@ -175,6 +182,8 @@ public:
       new_goods_list[i].end_cycle = cur_cycle + 999;
       log_trace("new goods[%d]:(%d,%d),money:%d,end_cycle:%d", i, x, y, money,
                 new_goods_list[i].end_cycle);
+      
+      total_goods_money += money;
     }
     total_goods_num += new_goods_num;
 
@@ -247,7 +256,6 @@ public:
     commands.push_back({SHIP, ship_id, berth_id});
   }
   void go(int ship_id) { commands.push_back({GO, ship_id, 0}); }
-
 
   bool is_valid_move(Point from, Point to) {
     if (from.x < 0 || from.x >= 200 || from.y < 0 || from.y >= 200) {

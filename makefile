@@ -5,8 +5,11 @@ MAP_PATH = $(SDK_PATH)/maps
 REPLAYER_PROG = $(SDK_PATH)/replayer/CodeCraft_2024_Replay.x86_64
 
 
-MAP_SEL = map2.txt
+
+RAND_SEED = 13000
+MAP_SEL = map1.txt
 TARGET = $(PWD)/build/main
+
 
 all: 
 	if [ ! -d "build" ]; then mkdir build && cd build && cmake .. && cd ..; fi
@@ -14,7 +17,7 @@ all:
 
 
 run:all
-	$(JUGDE_PROG)    -m $(MAP_PATH)/$(MAP_SEL)  $(TARGET)
+	$(JUGDE_PROG) -s $(RAND_SEED)   -m $(MAP_PATH)/$(MAP_SEL)  $(TARGET)
 
 test:all
 	$(TARGET)

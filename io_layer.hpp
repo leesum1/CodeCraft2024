@@ -48,6 +48,7 @@ public:
 
   // 港口打表
   std::array<std::unordered_map<Point, PointCost>, 10> berths_come_from;
+  std::array<bool, ROBOT_NUM> robots_dead;
 
   int total_goods_num = 0;   // 总货物数量
   int total_goods_money = 0; // 总货物价值
@@ -65,6 +66,7 @@ public:
              "goted_goods_money:%d",
              total_goods_num, total_goods_money, goted_goods_num,
              goted_goods_money);
+
   }
 
   bool init_game_map() {
@@ -118,7 +120,8 @@ public:
                berths_come_from[i].size());
     }
   }
-  std::vector<Point> get_berth_path(int berth_id, Point &from, bool &founded) {
+  std::vector<Point> get_berth_path(const int berth_id, const Point &from,
+                                    bool &founded) {
     if (berth_id < 0 || berth_id >= BERTH_NUM) {
       log_fatal("berth id out of range, expect 0~%d, actual:%d", BERTH_NUM,
                 berth_id);
@@ -146,6 +149,11 @@ public:
     path.pop_back();
 
     return path;
+  }
+  void robot_dead_list_init() {
+    for (int i = 0; i < ROBOT_NUM; i++) {
+      robots_dead[i] = false;
+    }
   }
 
   void init_done() {
@@ -188,7 +196,8 @@ public:
       scanf("%d%d%d", &x, &y, &money);
       new_goods_list[i].pos = Point(x, y);
       new_goods_list[i].money = money;
-      new_goods_list[i].end_cycle = cur_cycle + 999;
+      new_goods_list[i].end_cycle = cur_cycle + 998;
+      new_goods_list[i].status = GoodsStatus::Normal;
       log_trace("new goods[%d]:(%d,%d),money:%d,end_cycle:%d", i, x, y, money,
                 new_goods_list[i].end_cycle);
 
@@ -248,7 +257,7 @@ public:
   }
 
   // 机器人指令
-  void robot_move(int robot_id, RobotDrirection direction) {
+  void robot_move(const int robot_id, const RobotDrirection direction) {
     commands.push_back({ROBOT_MOVE, robot_id, static_cast<int>(direction)});
   }
   void robot_move(int robot_id, Point to) {
@@ -261,12 +270,12 @@ public:
   }
 
   // 船只指令
-  void ship(int ship_id, int berth_id) {
+  void ship(const int ship_id, const int berth_id) {
     commands.push_back({SHIP, ship_id, berth_id});
   }
   void go(int ship_id) { commands.push_back({GO, ship_id, 0}); }
 
-  bool is_valid_move(Point from, Point to) {
+  bool is_valid_move(const Point &from, const Point &to) {
     if (from.x < 0 || from.x >= 200 || from.y < 0 || from.y >= 200) {
       log_trace("from(%d,%d) out of range", from.x, from.y);
       return false;
@@ -282,7 +291,7 @@ public:
     return true;
   }
 
-  RobotDrirection calc_direction(Point from, Point to) {
+  RobotDrirection calc_direction(const Point &from, const Point &to) {
 
     // to 只能是 from 的上下左右，其余情况不合法
     if (abs(from.x - to.x) + abs(from.y - to.y) != 1) {
@@ -308,10 +317,16 @@ public:
   //-----------------test----------------------------------
 
   void test_berths_come_from() {
+    // game_map.print_map_with_point();
+
+    for (int i = 100; i < 120; i++) {
+      game_map.print_map_line(i);
+    }
 
     for (int i = 0; i < BERTH_NUM; i++) {
       // (117,3) (36, 173);
-      Point cur = Point(117,3);
+      // (117,3) to (107,122)
+      Point cur = Point(107, 122);
       bool founded = false;
       auto path = get_berth_path(i, cur, founded);
       if (founded) {

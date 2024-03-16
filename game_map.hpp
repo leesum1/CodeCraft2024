@@ -17,7 +17,7 @@ private:
   enum PosType { SPACE = 0, OCEAN = 1, ROBOT = 2, BARRIER = 3, BERTH = 4 };
 
 public:
-  PosType get_pos_type(Point &pos) {
+  PosType get_pos_type(const Point &pos) {
     if (is_valid_pos(pos)) {
       switch (map[pos.x][pos.y]) {
       case '.':
@@ -37,16 +37,16 @@ public:
     return PosType::BARRIER;
   }
 
-  bool is_valid_pos(Point &pos) {
+  bool is_valid_pos(const Point &pos) {
     return pos.x >= 0 && pos.x < 200 && pos.y >= 0 && pos.y < 200;
   }
-  bool is_barrier(Point &pos) {
+  bool is_barrier(const Point &pos) {
     PosType type = get_pos_type(pos);
     return type == PosType::BARRIER || type == PosType::OCEAN;
   }
   bool is_space(Point &pos) { return !is_barrier(pos); }
 
-  std::vector<Point> neighbors(Point &pos) {
+  std::vector<Point> neighbors(const Point &pos) {
     std::vector<Point> result;
     constexpr int dx[4] = {1, -1, 0, 0};
     constexpr int dy[4] = {0, 0, 1, -1};
@@ -73,8 +73,21 @@ public:
     }
   }
 
-  explicit GameMap() {
-
+  void print_map_with_point() {
+    for (int i = 0; i < 200; i++) {
+      for (int j = 0; j < 200; j++) {
+        log_raw("(%d,%d)%c", i, j, map[i][j]);
+      }
+      log_raw("\n");
+    }
   }
-  ~GameMap() {};
+  void print_map_line(int x) {
+    for (int i = 0; i < 200; i++) {
+      log_raw("%c", map[x][i]);
+    }
+    log_raw("line:%d\n",x);
+  }
+
+  explicit GameMap() {}
+  ~GameMap(){};
 };

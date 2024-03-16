@@ -1,7 +1,6 @@
 #include <bits/stdc++.h>
 #include <cstdio>
 
-#include "io_layer.hpp"
 #include "log.h"
 #include "mananger.hpp"
 
@@ -81,7 +80,6 @@ char scanf_buf[2048];
 
 int main() {
   log_init("log.txt", 6);
-  log_info("test");
 
   static int goods_count = 0;
 
@@ -89,7 +87,8 @@ int main() {
 
     auto m = Manager();
     m.init_game();
-    m.io_layer.test_berths_come_from();
+    // m.io_layer.test_berths_come_from();
+    m.test_berths1();
 
   } catch (const std::exception &e) {
 

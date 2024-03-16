@@ -33,10 +33,11 @@ public:
 
     // 删除 goods_list 中已经消失的货物
     for (auto it = map_goods_list.begin(); it != map_goods_list.end();) {
-      if (it->second.end_cycle < io_layer.cur_cycle) {
+      if (it->second.end_cycle < io_layer.cur_cycle &&
+          it->second.status != GoodsStatus::Got) {
         it = map_goods_list.erase(it);
       } else {
-        it++;
+        ++it;
       }
     }
 
@@ -54,9 +55,11 @@ public:
     static std::array<bool, ROBOT_NUM> robots_pull_action;
     static std::array<Goods, ROBOT_NUM> robots_target_goods_list;
     static std::array<bool, ROBOT_NUM> robots_has_goods;
+    static std::array<bool, ROBOT_NUM> robots_is_dead;
+    robots_is_dead.fill(false);
 
     // 让机器人循环去靠泊点
-    auto go_to_berth = [&](int robot_id, int &berth_id,
+    auto go_to_berth = [&](const int robot_id, int &berth_id,
                            std::vector<Point> &robot_path) {
       if (!robots_has_goods[robot_id]) {
         log_trace("robot[%d] has no goods, no need go_to_berth", robot_id);
@@ -64,24 +67,25 @@ public:
         return;
       }
 
-      Point robot_pos = io_layer.robots[robot_id].pos;
+      const Point &robot_pos = robots_cur_pos_list[robot_id];
       log_trace("robot[%d] berth_id:%d robot (%d,%d)", robot_id, berth_id,
                 P_ARG(robot_pos));
 
-      if (io_layer.berths[berth_id].in_berth_area(robot_pos)) {
+      // if (io_layer.berths[berth_id].in_berth_area(robot_pos)) {
 
-        log_trace("robot[%d] in berth area, pull action", robot_id);
-        // 机器人已经到达靠泊点
-        robots_pull_action[robot_id] = true;
-        io_layer.goted_goods_num++;
-        io_layer.goted_goods_money += robots_target_goods_list[robot_id].money;
+      //   log_trace("robot[%d] in berth area, pull action", robot_id);
+      //   // 机器人已经到达靠泊点
+      //   robots_pull_action[robot_id] = true;
+      //   io_layer.goted_goods_num++;
+      //   io_layer.goted_goods_money +=
+      //   robots_target_goods_list[robot_id].money;
 
-        robots_target_goods_list[robot_id] = invalid_goods;
+      //   robots_target_goods_list[robot_id] = invalid_goods;
 
-        // 清空机器人的路径
-        robots_path_list[robot_id].clear();
-        return;
-      }
+      //   // 清空机器人的路径
+      //   robots_path_list[robot_id].clear();
+      //   return;
+      // }
 
       if (robot_path.empty()) {
         berth_id = (berth_id + std::rand()) % BERTH_NUM;
@@ -96,12 +100,11 @@ public:
                    io_layer.berths.at(berth_id).pos.y + 1, path.size());
           robot_path = path;
         } else {
-          // 一定可以找到路径
-          log_info("berth[%d] path not found", berth_id);
-          for (auto p : path) {
-            log_info("path (%d,%d)", p.x, p.y);
-          }
-          // assert(false);
+          // 一定可以找到路径, 如果找不到路径,则机器人被困住了
+          log_trace("robot[%d] (%d,%d) not found path to berth[%d], is dead!",
+                    robot_id, P_ARG(robot_pos), berth_id);
+
+          robots_is_dead[robot_id] = true;
         }
       }
 
@@ -153,7 +156,7 @@ public:
     // 1. 地图障碍物
     // 2. 机器人当前位置
     // 3. 机器人下一个位置
-    auto is_barrier = [&](Point p) {
+    auto is_barrier = [&](const Point &p) {
       bool is_barrier1 = io_layer.game_map.is_barrier(p);
       bool is_barrier2 =
           std::any_of(robots_cur_pos_list.begin(), robots_cur_pos_list.end(),
@@ -215,7 +218,9 @@ public:
     };
     **/
 
-    auto find_neigh = [&](Point p) { return io_layer.game_map.neighbors(p); };
+    auto find_neigh = [&](const Point &p) {
+      return io_layer.game_map.neighbors(p);
+    };
 
     // 碰撞检测(采用剪切法)
     auto check_collision = [&](int robot_id) {
@@ -331,87 +336,98 @@ public:
                       "size:%d",
                       robot_id, P_ARG(path_last.back()), path_last.size());
             robots_next_pos_list.at(robot_id) = path_last.back();
+
+            // 如果机器人有预定的货物(还没有拿到),则取消预定
+            if ((robots_target_goods_list[robot_id].status ==
+                 GoodsStatus::Booked) &&
+                robots_has_goods[robot_id] == false) {
+
+              const auto &target_goods = robots_target_goods_list[robot_id];
+              log_debug("robot[%d] give up current target_good"
+                        "(%d,%d) status:%d, money:%d,end_cycle:%d",
+                        robot_id, P_ARG(target_goods.pos), target_goods.status,
+                        target_goods.money, target_goods.end_cycle);
+
+              // 取消预定状态
+              map_goods_list.at(target_goods.pos).status = GoodsStatus::Normal;
+
+              robots_target_goods_list[robot_id] = invalid_goods;
+            }
           }
         }
       }
       log_debug("robot[%d] check_collision end", robot_id);
     };
 
-    // auto err_debug = [&](int robot_id) {
-    //   log_info(
-    //       "after control robot[%d] robot_cur_pos(%d,%d)
-    //       robot_next_pos(%d,%d)", robot_id, robots_cur_pos_list[robot_id].x,
-    //       robots_cur_pos_list[robot_id].y, robots_next_pos_list[robot_id].x,
-    //       robots_next_pos_list[robot_id].y);
-    //   if (!io_layer.is_valid_move(robots_cur_pos_list[robot_id],
-    //                               robots_next_pos_list[robot_id])) {
-    //     log_trace("robot[%d] invalid move, path size", robot_id);
-    //     for (auto pos : robots_path_list[robot_id]) {
-    //       log_trace("robot[%d] path (%d,%d)", robot_id, pos.x, pos.y);
-    //     }
-    //   }
-    // };
+    auto err_debug = [&](int robot_id) {
+      // if (!io_layer.is_valid_move(robots_cur_pos_list[robot_id],
+      //                             robots_next_pos_list[robot_id])) {
+      //   log_trace("robot[%d] invalid move, path size", robot_id);
+
+      //   for (auto pos : robots_path_list[robot_id]) {
+      //     log_trace("robot[%d] path (%d,%d)", robot_id, pos.x, pos.y);
+      //   }
+      // }
+    };
 
     auto find_new_goods = [&](int robot_id) {
-      if (io_layer.cur_cycle < 20) {
-        return;
-      }
+      // 机器人位置位置信息
+      auto &cur_robot_target_goods = robots_target_goods_list[robot_id];
+      const Point &robot_pos = robots_cur_pos_list[robot_id];
+      const Point &robot_next_pos = robots_next_pos_list[robot_id];
 
-      if (robots_has_goods[robot_id]) {
-        log_trace("robot[%d] has goods, no need find_new_goods", robot_id);
-        // 机器人已经拿到货物,应该去卸货
-        return;
-      }
-
-      if (!robots_target_goods_list[robot_id].is_disappeared(
-              io_layer.cur_cycle) ||
-          robots_target_goods_list[robot_id] != invalid_goods) {
-
-        // 机器人已经有预定的货物,不需要再次寻找
-        log_trace(
-            "robot[%d] has selected goods (%d,%d), no need find_new_goods",
-            robot_id, P_ARG(robots_target_goods_list[robot_id].pos));
-
-        log_assert(!robots_path_list[robot_id].empty(),
-                   "robots_path_list[robot_id] is empty!");
+      if (!robots_path_list[robot_id].empty()) {
         robots_next_pos_list[robot_id] = robots_path_list[robot_id].back();
         return;
       }
 
-      // 机器人位置位置信息
-      Point robot_pos = robots_cur_pos_list[robot_id];
-      Point robot_next_pos = robots_next_pos_list[robot_id];
+      if (io_layer.cur_cycle < 20) {
+        // 前 20 个周期不需要寻找货物
+        return;
+      }
+
+      if (robots_has_goods[robot_id]) {
+        // 机器人已经拿到货物,应该去卸货
+        log_trace("robot[%d] got goods, no need find_new_goods", robot_id);
+        log_trace("cur_robot_target_goods (%d,%d) status:%d, cur_cycle:%d, "
+                  "end_cycle:%d",
+                  P_ARG(cur_robot_target_goods.pos),
+                  cur_robot_target_goods.status, io_layer.cur_cycle,
+                  cur_robot_target_goods.end_cycle);
+
+        // log_assert(cur_robot_target_goods.status == GoodsStatus::Got,
+        //            "error, robot should had goods (%d,%d),but status is %d,",
+        //            P_ARG(robot_pos), cur_robot_target_goods.status);
+        return;
+      }
+      if (!cur_robot_target_goods.is_disappeared(io_layer.cur_cycle)) {
+        // 货物没有消失
+        return;
+      }
+
+      if (cur_robot_target_goods.status == GoodsStatus::Booked &&
+          !cur_robot_target_goods.is_disappeared(io_layer.cur_cycle)) {
+        // 机器人已经有预定的货物,并且货物没有消失，不需要再次寻找
+        return;
+      }
 
       log_trace("robot[%d] find_new_goods start", robot_id);
 
-      // // 机器人当前位置是否有货物
-      // // 1. 有货物,没有消失,没有被选中
-      // auto it = map_goods_list.find(robot_pos);
-      // if (it != map_goods_list.end()) {
-      //   if (!it->second.is_disappeared(io_layer.cur_cycle) &&
-      //       it->second.be_selected == false) {
-      //     log_info("robot[%d] get goods at (%d,%d)", robot_id,
-      //              P_ARG(robot_pos));
-      //     it->second.be_selected = true;
-      //     robots_target_goods_list[robot_id] = it->second;
-      //     return;
-      //   }
-      // }
-
       // 使用 bfs 寻找最近的货物
       Goods goods_final = invalid_goods;
-      auto goods_goal_func = [&](Point p) {
+      auto goods_goal_func = [&](const Point &p) {
         auto it = map_goods_list.find(p);
         if (it != map_goods_list.end()) {
           log_debug("robot[%d] find goods at (%d,%d) money:%d, end_cycle %d, "
                     "selected %d, cur_cycle:%d",
                     robot_id, P_ARG(p), it->second.money, it->second.end_cycle,
-                    it->second.be_selected, io_layer.cur_cycle);
+                    it->second.status, io_layer.cur_cycle);
 
           // TODO: 加入 cost 比较时间
-          if (it->second.end_cycle > io_layer.cur_cycle &&
-              it->second.be_selected == false) {
-            it->second.be_selected = true;
+          if (it->second.status == GoodsStatus::Normal) {
+
+            // 将货物设置为预定状态
+            it->second.status = GoodsStatus::Booked;
             goods_final = it->second;
             log_trace("robot[%d] find goods at (%d,%d) money:%d", robot_id,
                       P_ARG(p), it->second.money);
@@ -422,6 +438,7 @@ public:
         return false;
       };
 
+      // TODO: 同时检测其他机器人的位置
       auto goods_is_barrier = [&](Point p) {
         return io_layer.game_map.is_barrier(p);
       };
@@ -436,6 +453,7 @@ public:
           BFS::get_path(robot_pos, goods_final.pos, goods_come_from, founded);
       log_trace("robot[%d] goods_path size:%d founded:%d", robot_id,
                 goods_path.size(), founded);
+
       if (founded) {
         log_assert(!goods_path.empty(), "goods_path is empty!");
         log_assert(goods_final != invalid_goods,
@@ -450,6 +468,108 @@ public:
       } else {
         // TODO: 机器人在范围内找不到货物,应该随机移动到范围内的一个点
         log_trace("robot[%d] goods_path not found", robot_id);
+
+        // 能不能再利用 BFS 的结果，找到一个路径，需要一个终点
+        // 需要另外的策略
+        // 1. 找不到路就停止 (在狭窄的地方会死锁)
+        // 2. 随便找块空地
+        auto goods_max_point =
+            std::max_element(goods_come_from.begin(), goods_come_from.end(),
+                             [&](const auto &p1, const auto &p2) {
+                               return p1.second.cost < p2.second.cost;
+                             });
+        bool success2 = false;
+        std::vector<Point> path_last = BFS::get_path(
+            robot_pos, goods_max_point->first, goods_come_from, success2);
+
+        robots_path_list[robot_id] = path_last;
+
+        if (path_last.empty()) {
+          // 找不到路就停止,可能会死锁? (可以优化吗, 再次寻小路去周围的空地?)
+          log_info("robot[%d] new path not found, stop move", robot_id);
+          robots_next_pos_list.at(robot_id) = Point();
+        } else {
+          log_assert(robots_has_goods[robot_id] == false,
+                     "error, robot has goods");
+
+          log_assert(cur_robot_target_goods.status == GoodsStatus::Dead,
+                     "error, robot has target_goods at (%d,%d) , status:%d, "
+                     "cur_cycle:%d, end_cycle:%d",
+                     P_ARG(cur_robot_target_goods.pos),
+                     cur_robot_target_goods.status, io_layer.cur_cycle,
+                     cur_robot_target_goods.end_cycle);
+
+          // 放弃当前路径，去新的空地避免死锁
+          log_trace("robot[%d] give up current path, go to new space(%d,%d) "
+                    "size:%d",
+                    robot_id, P_ARG(path_last.back()), path_last.size());
+
+          robots_next_pos_list.at(robot_id) = path_last.back();
+        }
+      }
+    };
+
+    auto robots_pull_get_cycle = [&](const int robot_id) {
+      const auto &cur_pos = robots_cur_pos_list[robot_id];
+      auto &cur_berth = io_layer.berths[berths_id_list[robot_id]];
+      auto &target_goods = robots_target_goods_list[robot_id];
+      const auto &had_goods = robots_has_goods[robot_id];
+
+      if (target_goods.status == GoodsStatus::Dead) {
+        // 没有货物
+        return;
+      }
+      if (target_goods.status == GoodsStatus::Booked &&
+          target_goods.is_disappeared(io_layer.cur_cycle)) {
+        // 正在去货物的路上,货物消失了
+        log_trace("robot[%d] target_goods is disappeared", robot_id);
+        robots_target_goods_list[robot_id].status = GoodsStatus::Dead;
+        robots_path_list[robot_id].clear();
+        return;
+      }
+      log_assert(target_goods.status != GoodsStatus::Normal,
+                 "goods states error");
+
+      if (cur_berth.in_berth_area(cur_pos) && had_goods) {
+
+        log_trace("robot[%d] pull goods at (%d,%d)", robot_id,
+                  P_ARG(target_goods.pos));
+        log_trace(
+            "robot[%d] goods money:%d,cur_cycle:%d end_cycle:%d, status:%d",
+            robot_id, target_goods.money, io_layer.cur_cycle,
+            target_goods.end_cycle, target_goods.status);
+
+        // 卸货要求
+        // 1. 机器人已经到达靠泊点
+        // 2. 机器人已经拿到货物
+        // 3. 机器人有预定的货物
+        io_layer.robot_pull(robot_id);
+        io_layer.goted_goods_num++;
+        io_layer.goted_goods_money += target_goods.money;
+
+        // 清空状态位
+        // 1. 机器人的目标货物
+        // 2. 地图上的货物
+        // 3. 机器人的路径
+        map_goods_list.at(target_goods.pos) = invalid_goods;
+        robots_target_goods_list[robot_id] = invalid_goods;
+        robots_path_list[robot_id].clear();
+      }
+
+      if (target_goods.status == GoodsStatus::Booked && !had_goods) {
+        if (cur_pos == target_goods.pos) {
+          // 装货要求
+          // 1. 机器人已经到达货物位置
+          // 2. 机器人没有拿到货物
+          // 3. 机器人有预定的货物
+          io_layer.robot_get(robot_id);
+          log_trace("robot[%d] get goods at (%d,%d)", robot_id,
+                    P_ARG(target_goods.pos));
+
+          // 更改货物状态
+          robots_target_goods_list[robot_id].status = GoodsStatus::Got;
+          map_goods_list.at(target_goods.pos).status = GoodsStatus::Got;
+        }
       }
     };
 
@@ -466,12 +586,29 @@ public:
         robots_has_goods[i] = io_layer.robots[i].had_goods;
       }
 
+      for (int i = 0; i < 10; i++) {
+        log_trace("robot[%d] is dead:%d", i, robots_is_dead[i]);
+      }
+
+      for (int i = 0; i < ROBOT_NUM; i++) {
+        if (robots_is_dead[i]) {
+          continue;
+        }
+        robots_pull_get_cycle(i);
+      }
+
       // 依次控制机器人
       for (int j = 0; j < 10; j++) {
+        if (robots_is_dead[j]) {
+          continue;
+        }
         find_new_goods(j);
       }
 
       for (int j = 0; j < 10; j++) {
+        if (robots_is_dead[j]) {
+          continue;
+        }
         go_to_berth(j, berths_id_list[j], robots_path_list[j]);
       }
 
@@ -480,51 +617,41 @@ public:
       //   run_circ(j, berths_id_list[j], robots_path_list[j]);
       // }
 
-      // // 对计算出来的下一步位置进行合法性检测
-      // for (int j = 0; j < 10; j++) {
-      //   err_debug(j);
-      // }
+      // 对计算出来的下一步位置进行合法性检测
+      for (int j = 0; j < 10; j++) {
+        if (robots_is_dead[j]) {
+          continue;
+        }
+        err_debug(j);
+      }
 
       // 碰撞检测与规避
       for (int j = 0; j < 10; j++) {
+        if (robots_is_dead[j]) {
+          continue;
+        }
         check_collision(j);
       }
 
       // 输出命令
       for (int j = 0; j < 10; j++) {
-        auto &cur_pos = robots_cur_pos_list[j];
-        auto &next_pos = robots_next_pos_list[j];
+        if (robots_is_dead[j]) {
+          continue;
+        }
+        const auto &cur_pos = robots_cur_pos_list[j];
+        const auto &next_pos = robots_next_pos_list[j];
         auto &cur_berth = io_layer.berths[berths_id_list[j]];
         auto &target_goods = robots_target_goods_list[j];
+        const auto &had_goods = robots_has_goods[j];
 
         if (next_pos != invalid_point) {
           io_layer.robot_move(j, next_pos);
-
-          bool clear_path = false;
-          if (cur_berth.in_berth_area(next_pos)) {
-            io_layer.robot_pull(j);
-            io_layer.goted_goods_num++;
-            io_layer.goted_goods_money += target_goods.money;
-            robots_target_goods_list[j] = invalid_goods;
-            clear_path = true;
-          }
-
-          if (target_goods != invalid_goods) {
-            if (next_pos == target_goods.pos) {
-              io_layer.robot_get(j);
-            }
-          }
-
-          if (clear_path) {
-            robots_path_list[j].clear();
-          } else {
-            robots_path_list[j].pop_back();
-          }
+          robots_path_list[j].pop_back();
         }
       }
-
       io_layer.output_cycle();
       io_layer.print_final_info();
+      log_info("map_goods_list size:%d", map_goods_list.size());
     }
   }
 };

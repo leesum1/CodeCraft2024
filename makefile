@@ -6,7 +6,7 @@ REPLAYER_PROG = $(SDK_PATH)/replayer/CodeCraft_2024_Replay.x86_64
 
 
 
-RAND_SEED = 13000
+RAND_SEED = 15000
 MAP_SEL = map2.txt
 TARGET = $(PWD)/build/main
 

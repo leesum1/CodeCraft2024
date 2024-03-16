@@ -66,7 +66,6 @@ public:
              "goted_goods_money:%d",
              total_goods_num, total_goods_money, goted_goods_num,
              goted_goods_money);
-
   }
 
   bool init_game_map() {
@@ -150,6 +149,39 @@ public:
 
     return path;
   }
+
+  std::vector<Point> get_near_berth_path(const Point &from, int &berth_id,
+                                         bool &founded) {
+    std::vector<Point> path;
+    int min_dis = 999999;
+    int min_berth_id = 0;
+    for (int i = 0; i < BERTH_NUM; i++) {
+      Point berth_pos = Point(berths[i].pos.x + 1, berths[i].pos.y + 1);
+      auto cur_path = get_berth_path(i, from, founded);
+      if (founded) {
+        if (cur_path.size() < min_dis) {
+          min_dis = cur_path.size();
+          min_berth_id = i;
+          path = cur_path;
+        }
+      }
+    }
+    berth_id = min_berth_id;
+    log_info("from(%d,%d) to berth[%d] (%d,%d) size:%d", from.x, from.y,
+             min_berth_id, berths[min_berth_id].pos.x + 1,
+             berths[min_berth_id].pos.y + 1, path.size());
+    return path;
+  }
+
+  bool in_berth_area(const Point &p) {
+    for (auto &berth : berths) {
+      if (berth.in_berth_area(p)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   void robot_dead_list_init() {
     for (int i = 0; i < ROBOT_NUM; i++) {
       robots_dead[i] = false;

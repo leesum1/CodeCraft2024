@@ -10,7 +10,10 @@ struct Berth {
   bool in_berth_area(const Point &p) {
     const auto& left_top = pos;
     const auto right_bottom = Point{pos.x + 3, pos.y + 3};
-    return p.x >= left_top.x && p.x <= right_bottom.x && p.y >= left_top.y &&
-           p.y <= right_bottom.y;
+
+    bool x_in = p.x >= left_top.x && p.x <= right_bottom.x;
+    bool y_in = p.y >= left_top.y && p.y <= right_bottom.y;
+
+    return x_in && y_in;
   }
 };

@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <optional>
 #include <queue>
 #include <unordered_map>
 #include <vector>
@@ -62,10 +63,15 @@ public:
   ~IoLayer(){};
 
   void print_final_info() {
+
     log_info("total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
              "goted_goods_money:%d",
              total_goods_num, total_goods_money, goted_goods_num,
              goted_goods_money);
+
+    for (auto &berth : berths) {
+      berth.print();
+    }
   }
 
   bool init_game_map() {
@@ -176,13 +182,13 @@ public:
     return path;
   }
 
-  bool in_berth_area(const Point &p) {
+  std::optional<int> in_berth_area(const Point &p) {
     for (auto &berth : berths) {
       if (berth.in_berth_area(p)) {
-        return true;
+        return berth.id;
       }
     }
-    return false;
+    return std::nullopt;
   }
 
   void robot_dead_list_init() {
@@ -203,6 +209,14 @@ public:
     scanf("%d", &ship_capacity);
     for (int i = 0; i < SHIP_NUM; i++) {
       ships[i].id = i;
+      ships[i].capacity = ship_capacity;
+      ships[i].cur_capacity = 0;
+      ships[i].cur_value = 0;
+      ships[i].inst_remine_cycle = 0;
+      ships[i].goods_wait_cycle = 0;
+      ships[i].berth_wait_cycle = 0;
+      ships[i].status = 1;
+      ships[i].berth_id = -1;
       log_info("ship[%d] capacity:%d", i, ships[i].capacity);
     }
     log_info("Ships initialized");
@@ -251,9 +265,9 @@ public:
     }
     // 船只状态
     for (int i = 0; i < SHIP_NUM; i++) {
-      scanf("%d%d", &ships[i].status, &ships[i].berch_id);
+      scanf("%d%d", &ships[i].status, &ships[i].berth_id);
       log_trace("ship [%d] status:%d,berth_id:%d", i, ships[i].status,
-                ships[i].berch_id);
+                ships[i].berth_id);
     }
 
     char okk[10];

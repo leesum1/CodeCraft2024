@@ -1,6 +1,7 @@
 #pragma once
 
 #include "point.hpp"
+#include <string>
 
 enum class GoodsStatus {
   Normal = 0, // 正常状态, 未被预定
@@ -15,6 +16,13 @@ public:
   int money;          // 货物价值
   int end_cycle;      // 货物消失的周期
   GoodsStatus status; // 货物状态
+
+  std::string to_string() const {
+    return "Goods: pos: (" + std::to_string(pos.x) + ", " +
+           std::to_string(pos.y) + "), money: " + std::to_string(money) +
+           ", end_cycle: " + std::to_string(end_cycle) +
+           ", status: " + std::to_string(static_cast<int>(status));
+  }
 
   bool is_disappeared(const int cur_cycle) {
     return (cur_cycle > end_cycle) || (status == GoodsStatus::Dead);

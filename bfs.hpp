@@ -10,6 +10,63 @@ class BFS {
 
 public:
   static std::unordered_map<Point, PointCost>
+  cut_path(const Point &start, std::function<bool(Point)> is_barrier,
+           std::function<std::vector<Point>(Point)> neighbors,
+           std::vector<Point> &cur_path, int cut_step, bool &success) {
+
+    log_assert(cut_step > 0, "cut_step should be greater than 0");
+    log_assert(cur_path.size() > 0, "cur_path should not be empty");
+    success = false;
+    Point Goal = cur_path.front();
+    if (cur_path.size() > cut_step) {
+      Goal = *(cur_path.end() - cut_step);
+    }
+
+    auto come_from = bfs_search(
+        start, [&Goal](Point p) { return p == Goal; }, is_barrier, neighbors,
+        40);
+    bool founded = false;
+    auto path = get_path(start, Goal, come_from, founded);
+
+    if (founded) {
+
+      // // 在这里才能清空砍断的路径
+      // // 1. 如果路径长度大于 skip_size ,则剪切掉后面的 skip_size 个点
+      // // 2. 如果路径长度小于 skip_size ,则清空路径
+      // if (robots_path_list[robot_id].size() >= skip_size) {
+      //   log_debug("robots_path_list before size:%d,skip_size:%d",
+      //             robots_path_list[robot_id].size(), skip_size);
+      //   for (int i = 0; i < skip_size; i++) {
+      //     robots_path_list[robot_id].pop_back();
+      //   }
+      // } else {
+      //   // 不足 10 个点,直接清空路径
+      //   robots_path_list[robot_id].clear();
+      // }
+
+      if (cur_path.size() >= cut_step) {
+        for (int i = 0; i < cut_step; i++) {
+          if (i == path.size() - 1) {
+            // log_assert(cur_path.back() == Goal,
+            //            "path.at(i) == Goal,back:(%d,%d),Goal:(%d,%d)",
+            //            cur_path.back().x, cur_path.back().y, Goal.x, Goal.y);
+          }
+          cur_path.pop_back();
+        }
+      } else {
+        cur_path.clear();
+      }
+
+      for (int i = 0; i < path.size(); i++) {
+        cur_path.push_back(path.at(i));
+      }
+      success = true;
+    }
+
+    return come_from;
+  }
+
+  static std::unordered_map<Point, PointCost>
   astar_search(const Point &start, const Point &goal,
                std::function<bool(Point)> is_barrier,
                std::function<int(Point)> heuristic,

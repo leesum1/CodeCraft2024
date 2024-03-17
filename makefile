@@ -6,8 +6,8 @@ REPLAYER_PROG = $(SDK_PATH)/replayer/CodeCraft_2024_Replay.x86_64
 
 
 
-RAND_SEED = 87918374
-MAP_SEL = map312.txt
+RAND_SEED = 8791
+MAP_SEL := map312.txt
 TARGET = $(PWD)/build/main
 # 获取时间戳
 TIMESTAMP = $(shell date +%s)

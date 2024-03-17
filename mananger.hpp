@@ -9,6 +9,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 class Manager {
 
@@ -22,10 +23,67 @@ public:
   void init_game() { io_layer.init(); }
   void run_game();
 
+  int calc_goods_weight(const Goods &goods, const int path_size) {
+    log_assert(path_size > 0, "error, path_size is 0");
+    log_assert(goods.money > 0, "error, goods.money is 0");
+    return (goods.money * 100) / path_size;
+  }
+
+  std::pair<Goods, std::vector<Point>>
+  find_best_goods_path_from_berth(const int berth_id, bool &founded) {
+    std::vector<Point> cur_path;
+    Goods goods_final = invalid_goods;
+    int max_weight = -1;
+
+    bool success = false;
+    // 遍历所有的货物,找到最有价值的货物
+    for (auto &goods : map_goods_list) {
+      if (goods.second.status == GoodsStatus::Normal) {
+        success = false;
+        auto path_tmp = io_layer.get_path_from_berth_to_point(
+            berth_id, goods.second.pos, success);
+
+        log_debug("berth[%d] find_best_goods_path_from_berth goods(%d,%d) "
+                  "path size:%d, success:%d, cur_cycle:%d, end_cycle:%d",
+                  berth_id, goods.second.pos.x, goods.second.pos.y,
+                  path_tmp.size(), success, io_layer.cur_cycle,
+                  goods.second.end_cycle);
+
+        if (success == false) {
+          continue;
+        }
+        // 判断是否能在货物消失之前拿到货物
+        const bool can_fetch_goods = !goods.second.is_disappeared(
+            io_layer.cur_cycle + path_tmp.size() + 10);
+
+        log_debug("can_fetch_goods:%d", can_fetch_goods);
+        if (!can_fetch_goods) {
+          continue;
+        }
+
+        int cur_weight = calc_goods_weight(goods.second, path_tmp.size());
+        log_debug("cur_weight:%d", cur_weight);
+        if (cur_weight > max_weight) {
+          max_weight = cur_weight;
+          cur_path = path_tmp;
+          goods_final = goods.second;
+          founded = true;
+          log_debug("find_best_goods_path_from_berth founded: %d, path_size:%d",
+                    success, cur_path.size());
+        }
+      }
+    }
+
+    log_debug("founded: %d, path_size:%d", founded, cur_path.size());
+
+    return std::make_pair(goods_final, cur_path);
+  }
+
   void ship_cycle(const int ship_id) {
     static std::array<bool, 10> berths_visit;
     auto &cur_ship = io_layer.ships[ship_id];
 
+    // 选择价值最高的泊位
     auto select_best_berth = [&]() {
       int target_berth_id = -1;
       int max_value = -1;
@@ -112,27 +170,72 @@ public:
     }
     if (!cur_ship.full()) {
       // 船只没有满
-      // 1. 当前泊位已经没有货物,等待 50 个周期
-      // 2. 当前泊位还有货物,继续装货
+      // 1. 剩余时间不足以虚拟点卸货,停留在当前泊位(无论当前泊位是否有货物)
+      // 2. 当前泊位有货物,继续装货
+      // 3.
+      // 当前泊位没有货物,并且剩余时间无法去下一个泊位装货,并去虚拟点卸货,停留在当前泊位
+      // 4.
+      // 当前泊位没有货物,并且剩余时间可以去下一个泊位装货,并且去虚拟点卸货,移动到下一个泊位
       auto &cur_berth = io_layer.berths[cur_ship.berth_id];
-      if (cur_berth.is_empty()) {
-        // 当前泊位已经没有货物,等待一段时间看看有没有新的货物
-        cur_ship.goods_wait_cycle++;
-        if (cur_ship.good_wait_tolong()) {
-          cur_ship.goods_wait_cycle = 0;
-          // 等待时间过长,移动到下一个泊位装货
-          int new_select_berth_id = select_best_berth();
+      const int cur_transport_time = cur_berth.transport_time;
+      const int remine_time = 15000 - (io_layer.cur_cycle + 1);
 
+      if (remine_time - cur_transport_time < 5) {
+        // 必须出发去虚拟点卸货了
+        log_trace("ship[%d] don't have enough time to move to next berth, go "
+                  "to virtual point",
+                  ship_id, cur_ship.berth_id);
+        io_layer.go(ship_id);
+        return;
+      }
+
+      if (cur_berth.is_empty()) {
+        // 当前泊位已经没有货物
+        // 1. 选择一个价值最高的泊位(最好考虑装载速度和运输时间)
+        int new_select_berth_id = select_best_berth();
+        // 2. 计算去下一个泊位的装货然后去虚拟点卸货的时间
+        const int next_transport_time =
+            io_layer.berths[new_select_berth_id].transport_time + 500;
+        // 3. 如果剩余时间不足以去下一个泊位装货,停留在当前泊位
+        if (remine_time > next_transport_time + 15) {
+          // 足够时间去下一个泊位装货
           log_trace("ship[%d] wait too long in berth[%d], go to berth[%d]",
                     ship_id, cur_ship.berth_id, new_select_berth_id);
-
           berths_visit[new_select_berth_id] = true;
           berths_visit[cur_ship.berth_id] = false;
           io_layer.ship(ship_id, new_select_berth_id);
-
           // 泊位之间的移动时间为 500
           cur_ship.new_inst(500);
+          return;
+        } else {
+          // 剩余时间不足以去下一个泊位装货,停留在当前泊位
+          log_trace("ship[%d] wait too long in berth[%d], but no time to "
+                    "move to next berth",
+                    ship_id, cur_ship.berth_id);
+          return;
         }
+
+        // if (cur_ship.good_wait_tolong()) {
+        //   cur_ship.goods_wait_cycle = 0;
+        //   // 等待时间过长,移动到下一个泊位装货
+
+        //   if (remine_time < next_transport_time) {
+        //     log_trace("ship[%d] wait too long in berth[%d], but no time to "
+        //               "move to next berth",
+        //               ship_id, cur_ship.berth_id);
+        //     return;
+        //   } else {
+        //     log_trace("ship[%d] wait too long in berth[%d], go to berth[%d]",
+        //               ship_id, cur_ship.berth_id, new_select_berth_id);
+
+        //     berths_visit[new_select_berth_id] = true;
+        //     berths_visit[cur_ship.berth_id] = false;
+        //     io_layer.ship(ship_id, new_select_berth_id);
+
+        //     // 泊位之间的移动时间为 500
+        //     cur_ship.new_inst(500);
+        //   }
+        // }
       } else {
         // 当前泊位还有货物,继续装货
         cur_ship.goods_wait_cycle = 0;
@@ -338,63 +441,12 @@ public:
 
         log_info("robot[%d] and robot[%d] collision", robot_id, i);
 
-        // 这里仅仅只是选择一个点,不能清空路径
-        Point target_point = cut_path(robot_id, robots_path_list[robot_id]);
+        bool test_success;
+        auto come_from_t =
+            BFS::cut_path(robot_cur_pos, is_barrier, find_neigh,
+                          robots_path_list[robot_id], 10, test_success);
 
-        log_info("robot[%d] robot_cur_pos(%d,%d) try to find a path to new "
-                 "target point:(%d,%d)",
-                 robot_id, robot_cur_pos.x, robot_cur_pos.y, target_point.x,
-                 target_point.y);
-
-        auto goal_func = [&](Point p) { return p == target_point; };
-        auto heuristic_func = [&](Point n) {
-          return std::abs(n.x - target_point.x) +
-                 std::abs(n.y - target_point.y);
-        };
-
-        // 通过 BFS 找到一个新的路径到断点上
-        auto come_from_t = BFS::bfs_search(robot_cur_pos, goal_func, is_barrier,
-                                           find_neigh, 20);
-
-        // auto come_from_t =
-        //     BFS::astar_search(robot_cur_pos, target_point, is_barrier,
-        //                       heuristic_func, find_neigh);
-
-        log_info("robot[%d] come_from_t size:%d", robot_id, come_from_t.size());
-        bool success;
-        auto new_path =
-            BFS::get_path(robot_cur_pos, target_point, come_from_t, success);
-        if (success) {
-          log_assert(!new_path.empty(), "new_path is empty!");
-
-          log_debug("robots_path_list before size:%d",
-                    robots_path_list[robot_id].size());
-          // 在这里才能清空砍断的路径
-          // 1. 如果路径长度大于 skip_size ,则剪切掉后面的 skip_size 个点
-          // 2. 如果路径长度小于 skip_size ,则清空路径
-          if (robots_path_list[robot_id].size() >= skip_size) {
-            log_debug("robots_path_list before size:%d,skip_size:%d",
-                      robots_path_list[robot_id].size(), skip_size);
-            for (int i = 0; i < skip_size; i++) {
-              robots_path_list[robot_id].pop_back();
-            }
-          } else {
-            // 不足 10 个点,直接清空路径
-            robots_path_list[robot_id].clear();
-          }
-
-          log_debug("robots_path_list after size:%d",
-                    robots_path_list[robot_id].size());
-          log_info("robot[%d] new path size:%d", robot_id, new_path.size());
-
-          // 将新的迂回路径添加到原路径中
-          for (const auto p : new_path) {
-            log_info("new (%d,%d) robots_path_list size:%d", P_ARG(p),
-                     robots_path_list[robot_id].size());
-            robots_path_list[robot_id].push_back(p);
-          }
-          log_info("robot[%d] path size (after) :%d", robot_id,
-                   robots_path_list[robot_id].size());
+        if (test_success) {
 
           // 更新下一步位置
           robots_next_pos_list.at(robot_id) = robots_path_list[robot_id].back();
@@ -459,6 +511,9 @@ public:
       // }
     };
 
+    const int bsf_max_search_count_per_cycle = 4;
+    const int bfs_max_level = 30;
+
     auto find_new_goods = [&](int robot_id) {
       // 机器人位置位置信息
       auto &cur_robot_target_goods = robots_target_goods_list[robot_id];
@@ -470,12 +525,12 @@ public:
         return;
       }
 
-      if (io_layer.cur_cycle < 10) {
+      if (io_layer.cur_cycle < 20) {
         // 前 20 个周期不需要寻找货物
         return;
       }
 
-      if (search_count > 3) {
+      if (search_count > bsf_max_search_count_per_cycle) {
         return;
       }
 
@@ -496,10 +551,10 @@ public:
       if (cur_robot_target_goods.status == GoodsStatus::Booked &&
           !cur_robot_target_goods.is_disappeared(io_layer.cur_cycle)) {
         // 货物没有消失
-        log_assert(
-            !robots_path_list[robot_id].empty(),
-            "error, robot should had path to goods (%d,%d),but path is empty",
-            P_ARG(cur_robot_target_goods.pos));
+        log_assert(!robots_path_list[robot_id].empty(),
+                   "error, robot[%d] should had path to goods (%d,%d),but path "
+                   "is empty",
+                   robot_id, P_ARG(cur_robot_target_goods.pos));
         robots_next_pos_list[robot_id] = robots_path_list[robot_id].back();
         return;
       }
@@ -524,6 +579,51 @@ public:
           if (!robots_path_list[robot_id].empty()) {
             robots_next_pos_list[robot_id] = robots_path_list[robot_id].back();
             // 还有随机路径时,不需要再次寻找
+            return;
+          }
+        }
+      }
+
+      // 测试函数
+      auto can_search = io_layer.in_berth_search_area(robot_pos);
+      if (can_search.has_value()) {
+        log_debug("robot[%d] in_berth_search_area", robot_id);
+        const int search_berth_id = can_search.value();
+        log_assert(search_berth_id >= 0 && search_berth_id < BERTH_NUM,
+                   "error, search_berth_id is invalid");
+        bool search_founded = false;
+        auto search_result =
+            find_best_goods_path_from_berth(search_berth_id, search_founded);
+
+        if (search_founded) {
+          const auto searched_goods = search_result.first;
+          auto searched_path = search_result.second;
+          log_assert(!searched_path.empty(), "error, searched_path is empty");
+
+          bool cut_success = false;
+          auto search_come_from =
+              BFS::cut_path(robot_pos, is_barrier, find_neigh, searched_path,
+                            10, cut_success);
+
+          if (cut_success) {
+            log_assert(!searched_path.empty(),
+                       "error, search_come_from is "
+                       "empty, robot_pos(%d,%d), "
+                       "searched_path size:%d",
+                       P_ARG(robot_pos), searched_path.size());
+
+            // 更新机器人的路径,下一步位置,货物信息
+            robots_path_list[robot_id] = searched_path;
+            robots_next_pos_list[robot_id] = searched_path.back();
+            robots_target_goods_list[robot_id] = searched_goods;
+            robots_target_goods_list[robot_id].status = GoodsStatus::Booked;
+            map_goods_list.at(searched_goods.pos).status = GoodsStatus::Booked;
+
+            log_trace(
+                "robot[%d] in_berth_search_area success, find goods(%d,%d), "
+                "path size %d ",
+                robot_id, P_ARG(searched_goods.pos), searched_path.size());
+
             return;
           }
         }
@@ -563,8 +663,9 @@ public:
         return io_layer.game_map.is_barrier(p);
       };
 
-      auto goods_come_from = BFS::bfs_search(robot_pos, goods_goal_func,
-                                             goods_is_barrier, find_neigh, 100);
+      auto goods_come_from =
+          BFS::bfs_search(robot_pos, goods_goal_func, goods_is_barrier,
+                          find_neigh, bfs_max_level);
       log_trace("robot[%d] goods_come_from size:%d, goods_final (%d,%d)",
                 robot_id, goods_come_from.size(), P_ARG(goods_final.pos));
 
@@ -632,6 +733,7 @@ public:
           } else {
             robots_idle_cycle[robot_id] =
                 10 + std::rand() % (path_last.size() - 9);
+            robots_idle_cycle[robot_id] = path_last.size();
           }
         }
       }

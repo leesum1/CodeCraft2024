@@ -62,6 +62,48 @@ public:
   explicit IoLayer() {}
   ~IoLayer(){};
 
+  std::vector<Point> get_path_from_berth_to_point(const int berth_id,
+                                                  const Point &to,
+                                                  bool &founded) {
+    Point berth_pos =
+        Point(berths[berth_id].pos.x + 1, berths[berth_id].pos.y + 1);
+    auto path =
+        BFS::get_path(berth_pos, to, berths_come_from[berth_id], founded);
+    return path;
+  }
+
+  std::vector<Point> get_path_from_point_to_berth(const int berth_id,
+                                                  const Point &from,
+                                                  bool &founded) {
+    if (berth_id < 0 || berth_id >= BERTH_NUM) {
+      log_fatal("berth id out of range, expect 0~%d, actual:%d", BERTH_NUM,
+                berth_id);
+      assert(false);
+    }
+    // find the path
+    Point berth_pos =
+        Point(berths[berth_id].pos.x + 1, berths[berth_id].pos.y + 1);
+    Point goal_pos = from;
+
+    auto path =
+        BFS::get_path(berth_pos, goal_pos, berths_come_from[berth_id], founded);
+
+    log_info("berth[%d] (%d,%d) to (%d,%d) size:%d", berth_id, P_ARG(berth_pos),
+             P_ARG(goal_pos), path.size());
+    if (founded) {
+      if (path.front() != from) {
+        log_fatal("path.front() != from, path.front():(%d,%d), from:(%d,%d)",
+                  path.front().x, path.front().y, from.x, from.y);
+        assert(false);
+      }
+    }
+    path.emplace_back(berth_pos);
+    std::reverse(path.begin(), path.end());
+    path.pop_back();
+
+    return path;
+  }
+
   void print_final_info() {
 
     log_info("total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
@@ -185,6 +227,16 @@ public:
   std::optional<int> in_berth_area(const Point &p) {
     for (auto &berth : berths) {
       if (berth.in_berth_area(p)) {
+        return berth.id;
+      }
+    }
+    return std::nullopt;
+  }
+
+  std::optional<int> in_berth_search_area(const Point &p) {
+
+    for (auto &berth : berths) {
+      if (berth.in_berth_search_area(p)) {
         return berth.id;
       }
     }

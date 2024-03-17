@@ -24,16 +24,19 @@ enum LogLevel { INFO, WARN, DEBUG, TRACE, FATAL };
 //   } while (0)
 
 
-#define log_assert(cond, ...)                                                  \
-  do {                                                                         \
-    if (!(cond)) {                                                             \
-      log_write(FATAL, __FILE__, __LINE__, __VA_ARGS__);                       \
-      assert(false);                                                           \
-    }                                                                          \
-  } while (0)
+// #define log_assert(cond, ...)                                                  \
+//   do {                                                                         \
+//     if (!(cond)) {                                                             \
+//       log_write(FATAL, __FILE__, __LINE__, __VA_ARGS__);                       \
+//       assert(false);                                                           \
+//     }                                                                          \
+//   } while (0)
+
+
 
 #define log_info(...)
 #define log_warn(...)
 #define log_debug(...)
 #define log_trace(...)
 #define log_fatal(...)
+#define log_assert(cond, ...)

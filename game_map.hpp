@@ -4,6 +4,7 @@
 
 #include "log.h"
 #include "point.hpp"
+#include <random>
 #include <vector>
 class GameMap {
 
@@ -57,6 +58,11 @@ public:
         result.push_back(Point(nx, ny));
       }
     }
+
+    // 随机打乱
+    std::random_device rd;
+    std::shuffle(result.begin(), result.end(), rd);
+
     return result;
   }
   void write_line(char *buf, int x) {
@@ -85,7 +91,7 @@ public:
     for (int i = 0; i < 200; i++) {
       log_raw("%c", map[x][i]);
     }
-    log_raw("line:%d\n",x);
+    log_raw("line:%d\n", x);
   }
 
   explicit GameMap() {}

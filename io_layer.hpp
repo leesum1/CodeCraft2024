@@ -155,14 +155,17 @@ public:
     std::vector<Point> path;
     int min_dis = 999999;
     int min_berth_id = 0;
+    bool found_path = false;
+    // 只要能到达任意一个港口就行
     for (int i = 0; i < BERTH_NUM; i++) {
       Point berth_pos = Point(berths[i].pos.x + 1, berths[i].pos.y + 1);
-      auto cur_path = get_berth_path(i, from, founded);
-      if (founded) {
+      auto cur_path = get_berth_path(i, from, found_path);
+      if (found_path) {
         if (cur_path.size() < min_dis) {
           min_dis = cur_path.size();
           min_berth_id = i;
           path = cur_path;
+          founded = true;
         }
       }
     }

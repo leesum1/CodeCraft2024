@@ -57,6 +57,7 @@ public:
     static std::array<bool, ROBOT_NUM> robots_has_goods;
     static std::array<bool, ROBOT_NUM> robots_is_dead;
     static std::array<int, ROBOT_NUM> robots_idle_cycle;
+    static int search_count = 0;
 
     robots_is_dead.fill(false);
 
@@ -299,7 +300,7 @@ public:
 
         // 通过 BFS 找到一个新的路径到断点上
         auto come_from_t = BFS::bfs_search(robot_cur_pos, goal_func, is_barrier,
-                                           find_neigh, 30);
+                                           find_neigh, 20);
 
         // auto come_from_t =
         //     BFS::astar_search(robot_cur_pos, target_point, is_barrier,
@@ -357,13 +358,14 @@ public:
           std::vector<Point> path_last = BFS::get_path(
               robot_cur_pos, max_point->first, come_from_t, success2);
 
-          robots_path_list[robot_id] = path_last;
-
           if (path_last.empty()) {
             // 找不到路就停止,可能会死锁? (可以优化吗, 再次寻小路去周围的空地?)
             log_info("robot[%d] new path not found, stop move", robot_id);
             robots_next_pos_list.at(robot_id) = Point();
           } else {
+
+            robots_path_list[robot_id] = path_last;
+
             // 放弃当前路径，去新的空地避免死锁
             log_trace("robot[%d] give up current path, go to new space(%d,%d) "
                       "size:%d",
@@ -414,8 +416,12 @@ public:
         return;
       }
 
-      if (io_layer.cur_cycle < 20) {
-        // 前 20 个周期不需要寻找货物
+      // if (io_layer.cur_cycle < 20) {
+      //   // 前 20 个周期不需要寻找货物
+      //   return;
+      // }
+
+      if (search_count > 3) {
         return;
       }
 
@@ -469,6 +475,8 @@ public:
         }
       }
 
+      search_count++;
+
       log_trace("robot[%d] find_new_goods start", robot_id);
 
       // 使用 bfs 寻找最近的货物
@@ -502,7 +510,7 @@ public:
       };
 
       auto goods_come_from = BFS::bfs_search(robot_pos, goods_goal_func,
-                                             goods_is_barrier, find_neigh, 50);
+                                             goods_is_barrier, find_neigh, 100);
       log_trace("robot[%d] goods_come_from size:%d, goods_final (%d,%d)",
                 robot_id, goods_come_from.size(), P_ARG(goods_final.pos));
 
@@ -652,6 +660,7 @@ public:
       // 更新货物信息
       goods_list_cycle();
 
+      search_count = 0;
       // 获取机器人当前位置
       for (int i = 0; i < 10; i++) {
         robots_cur_pos_list[i] = io_layer.robots[i].pos;
@@ -668,43 +677,42 @@ public:
           continue;
         }
         robots_pull_get_cycle(i);
-      }
-
-      // 依次控制机器人
-      for (int j = 0; j < 10; j++) {
-        if (robots_is_dead[j]) {
-          continue;
-        }
-        find_new_goods(j);
-      }
-
-      for (int j = 0; j < 10; j++) {
-        if (robots_is_dead[j]) {
-          continue;
-        }
-        go_near_berth(j);
+        find_new_goods(i);
+        go_near_berth(i);
+        err_debug(i);
+        check_collision(i);
       }
 
       // // 依次控制机器人
       // for (int j = 0; j < 10; j++) {
-      //   run_circ(j, berths_id_list[j], robots_path_list[j]);
+      //   if (robots_is_dead[j]) {
+      //     continue;
+      //   }
+      //   find_new_goods(j);
       // }
 
-      // 对计算出来的下一步位置进行合法性检测
-      for (int j = 0; j < 10; j++) {
-        if (robots_is_dead[j]) {
-          continue;
-        }
-        err_debug(j);
-      }
+      // for (int j = 0; j < 10; j++) {
+      //   if (robots_is_dead[j]) {
+      //     continue;
+      //   }
+      //   go_near_berth(j);
+      // }
 
-      // 碰撞检测与规避
-      for (int j = 0; j < 10; j++) {
-        if (robots_is_dead[j]) {
-          continue;
-        }
-        check_collision(j);
-      }
+      // // 对计算出来的下一步位置进行合法性检测
+      // for (int j = 0; j < 10; j++) {
+      //   if (robots_is_dead[j]) {
+      //     continue;
+      //   }
+      //   err_debug(j);
+      // }
+
+      // // 碰撞检测与规避
+      // for (int j = 0; j < 10; j++) {
+      //   if (robots_is_dead[j]) {
+      //     continue;
+      //   }
+      //   check_collision(j);
+      // }
 
       // 输出命令
       for (int j = 0; j < 10; j++) {

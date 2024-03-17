@@ -1,13 +1,13 @@
 
 SDK_PATH = /home/leesum/Documents/huawei_soft2024/LinuxRelease.part01/LinuxRelease
 JUGDE_PROG = $(SDK_PATH)/PreliminaryJudge
-MAP_PATH = $(SDK_PATH)/maps
+MAP_PATH = ./maps
 REPLAYER_PROG = $(SDK_PATH)/replayer/CodeCraft_2024_Replay.x86_64
 
 
 
-RAND_SEED = 15000
-MAP_SEL = map2.txt
+RAND_SEED = 12312
+MAP_SEL = map37.txt
 TARGET = $(PWD)/build/main
 
 

@@ -5,3 +5,4 @@ maps/
 build/
 .*/
 cmake-build-debug/
+zip/

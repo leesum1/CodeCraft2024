@@ -13,30 +13,30 @@ enum LogLevel { INFO, WARN, DEBUG, TRACE, FATAL };
 #define SOURCE_PATH_SIZE 0
 #endif
 
-// #define log_info(...) log_write(INFO, __FILENAME__, __LINE__, __VA_ARGS__)
-// #define log_warn(...) log_write(WARN, __FILENAME__, __LINE__, __VA_ARGS__)
-// #define log_debug(...) log_write(DEBUG, __FILENAME__, __LINE__, __VA_ARGS__)
-// #define log_trace(...) log_write(TRACE, __FILENAME__, __LINE__, __VA_ARGS__)
-// #define log_fatal(...)                                                         \
-//   do {                                                                         \
-//     log_write(FATAL, __FILE__, __LINE__, __VA_ARGS__);                         \
-//     assert(false);                                                             \
-//   } while (0)
+#define log_info(...) log_write(INFO, __FILENAME__, __LINE__, __VA_ARGS__)
+#define log_warn(...) log_write(WARN, __FILENAME__, __LINE__, __VA_ARGS__)
+#define log_debug(...) log_write(DEBUG, __FILENAME__, __LINE__, __VA_ARGS__)
+#define log_trace(...) log_write(TRACE, __FILENAME__, __LINE__, __VA_ARGS__)
+#define log_fatal(...)                                                         \
+  do {                                                                         \
+    log_write(FATAL, __FILE__, __LINE__, __VA_ARGS__);                         \
+    assert(false);                                                             \
+  } while (0)
 
 
-// #define log_assert(cond, ...)                                                  \
-//   do {                                                                         \
-//     if (!(cond)) {                                                             \
-//       log_write(FATAL, __FILE__, __LINE__, __VA_ARGS__);                       \
-//       assert(false);                                                           \
-//     }                                                                          \
-//   } while (0)
+#define log_assert(cond, ...)                                                  \
+  do {                                                                         \
+    if (!(cond)) {                                                             \
+      log_write(FATAL, __FILE__, __LINE__, __VA_ARGS__);                       \
+      assert(false);                                                           \
+    }                                                                          \
+  } while (0)
 
 
 
-#define log_info(...)
-#define log_warn(...)
-#define log_debug(...)
-#define log_trace(...)
-#define log_fatal(...)
-#define log_assert(cond, ...)
+// #define log_info(...)
+// #define log_warn(...)
+// #define log_debug(...)
+// #define log_trace(...)
+// #define log_fatal(...)
+// #define log_assert(cond, ...)

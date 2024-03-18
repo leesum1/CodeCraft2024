@@ -79,7 +79,7 @@ int Input() {
 char scanf_buf[2048];
 
 int main() {
-  // log_init("log.txt", 6);
+  log_init("log.txt", 6);
 
   static int goods_count = 0;
 

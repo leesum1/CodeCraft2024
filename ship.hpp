@@ -19,6 +19,7 @@ public:
   int inst_remine_cycle; // 当前指令剩余周期
 
   bool good_wait_tolong() { return this->goods_wait_cycle > 50; }
+  int  capacity_percent() { return this->cur_capacity * 100 / this->capacity; }
 
   bool can_accpet_inst() { return this->inst_remine_cycle <= 0; }
   void new_inst(int inst_cycle) {

@@ -6,7 +6,7 @@ REPLAYER_PROG = $(SDK_PATH)/replayer/CodeCraft_2024_Replay.x86_64
 
 
 
-RAND_SEED = 8791
+RAND_SEED = 879111
 MAP_SEL := map312.txt
 TARGET = $(PWD)/build/main
 # 获取时间戳
@@ -25,6 +25,7 @@ test:all
 	$(TARGET)
 
 zip:
+	rm log.txt 	
 	zip zip/$(ZIP_NAME)  *
 
 replay:all

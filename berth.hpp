@@ -4,16 +4,38 @@
 #include "log.h"
 #include "point.hpp"
 #include <algorithm>
-#include <deque>
 #include <list>
-#include <queue>
 struct Berth {
   Point pos;
   int transport_time;
   int loading_speed;
   int id;
 
+  // 一些信息, 港口周围货物的信息，机器人会优先去货物多的港口
+  int near_goods_num = 0;
+  int near_goods_value = 0;
+  int near_goods_distance = 0;
+
   std::list<Goods> goods_list;
+
+  void clear_goods_info() {
+    near_goods_num = 0;
+    near_goods_value = 0;
+    near_goods_distance = 0;
+  }
+
+  void printf_near_goods_info() {
+    log_info("Berth id: %d, near_goods_num: %d, near_goods_value: %d, "
+             "near_goods_distance: %d",
+             id, near_goods_num, near_goods_value, near_goods_distance);
+  }
+
+  float calc_berth_wight(const Point &p) {
+    // float w1 = (near_goods_value + 1) / (near_goods_distance * 2);
+    float w1 = (near_goods_value) / ((near_goods_distance + 1) * 2);
+    return w1;
+  }
+
   int goods_num() { return goods_list.size(); }
   int goods_value() {
     int sum = 0;
@@ -34,8 +56,8 @@ struct Berth {
   }
 
   bool in_berth_search_area(const Point &p) {
-    const auto &left_top = Point{pos.x - 5, pos.y - 5};
-    const auto right_bottom = Point{pos.x + 8, pos.y + 8};
+    const auto &left_top = Point{pos.x - 2, pos.y - 2};
+    const auto right_bottom = Point{pos.x + 5, pos.y + 5};
 
     bool x_in = p.x >= left_top.x && p.x <= right_bottom.x;
     bool y_in = p.y >= left_top.y && p.y <= right_bottom.y;

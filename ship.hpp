@@ -19,7 +19,7 @@ public:
   int inst_remine_cycle; // 当前指令剩余周期
 
   bool good_wait_tolong() { return this->goods_wait_cycle > 50; }
-  int  capacity_percent() { return this->cur_capacity * 100 / this->capacity; }
+  int capacity_percent() { return this->cur_capacity * 100 / this->capacity; }
 
   bool can_accpet_inst() { return this->inst_remine_cycle <= 0; }
   void new_inst(int inst_cycle) {
@@ -34,9 +34,9 @@ public:
     this->cur_value += value;
   }
   void unload() {
-    log_assert(this->cur_capacity > 0, "cur_capacity is not positive, %d",
+    log_assert(this->cur_capacity >= 0, "cur_capacity is not positive, %d",
                this->cur_capacity);
-    log_assert(this->cur_value > 0, "cur_value is not positive %d",
+    log_assert(this->cur_value >= 0, "cur_value is not positive %d",
                this->cur_value);
 
     log_assert(this->berth_id == -1, "berth_id is not -1, %d", this->berth_id);

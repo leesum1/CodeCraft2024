@@ -5,11 +5,15 @@
 #include "point.hpp"
 #include <algorithm>
 #include <list>
+#include <utility>
 struct Berth {
   Point pos;
   int transport_time;
   int loading_speed;
   int id;
+
+  int avg_berth_transport_time = 0;  // 平均港口运输时间
+  float avg_berth_loading_speed = 0; // 平均港口装货速度
 
   // 一些信息, 港口周围货物的信息，机器人会优先去货物多的港口
   int near_goods_num = 0;
@@ -17,6 +21,26 @@ struct Berth {
   int near_goods_distance = 0;
 
   std::list<Goods> goods_list;
+  // 1000周期内的货物信息
+  // std::pair<放入的时间，货物价值>
+  std::list<std::pair<int, int>> goods_list_in_1000cycle;
+
+  void tick(const int cur_cycle) {
+    // 清除1000周期外的货物信息
+    while (!goods_list_in_1000cycle.empty() &&
+           goods_list_in_1000cycle.front().first < (cur_cycle - 1000)) {
+      goods_list_in_1000cycle.pop_front();
+    }
+    clear_goods_info();
+  }
+
+  int money_in_1000cycle() {
+    int sum = 0;
+    std::for_each(goods_list_in_1000cycle.begin(),
+                  goods_list_in_1000cycle.end(),
+                  [&sum](const std::pair<int, int> &p) { sum += p.second; });
+    return sum;
+  }
 
   void clear_goods_info() {
     near_goods_num = 0;
@@ -31,9 +55,10 @@ struct Berth {
   }
 
   float calc_berth_wight(const Point &p) {
-    // float w1 = (near_goods_value + 1) / (near_goods_distance * 2);
-    float w1 = (near_goods_value) / ((near_goods_distance + 1) * 2);
-    return w1;
+    float trans_w =
+        avg_berth_transport_time / (float)transport_time; // 越大越好
+    float load_w = (float)loading_speed / avg_berth_loading_speed; // 越大越好
+    return trans_w * load_w;
   }
 
   int goods_num() { return goods_list.size(); }
@@ -66,7 +91,10 @@ struct Berth {
   }
 
   bool is_empty() { return goods_list.empty(); }
-  void add_goods(const Goods &g) { goods_list.push_back(g); }
+  void add_goods(const Goods &g, const int cur_cycle) {
+    goods_list.push_back(g);
+    goods_list_in_1000cycle.push_back(std::make_pair(cur_cycle, g.money));
+  }
   Goods get_goods() {
     Goods g = goods_list.front();
     goods_list.pop_front();

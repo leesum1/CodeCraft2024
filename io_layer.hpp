@@ -9,16 +9,16 @@
 #include "robot.hpp"
 #include "ship.hpp"
 #include <algorithm>
-#include <any>
 #include <array>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <optional>
 #include <queue>
-#include <stdexcept>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #define SHIP_NUM 5
@@ -66,6 +66,45 @@ public:
 
   explicit IoLayer() {}
   ~IoLayer(){};
+
+  int total_goods_avg_money() {
+    if (total_goods_num == 0) {
+      return 0;
+    }
+    return total_goods_money / total_goods_num;
+  }
+  int goted_goods_avg_money() {
+    if (goted_goods_num == 0) {
+      return 0;
+    }
+    return goted_goods_money / goted_goods_num;
+  }
+  int selled_goods_avg_money() {
+    if (selled_goods_num == 0) {
+      return 0;
+    }
+    return selled_goods_money / selled_goods_num;
+  }
+
+  /**
+   * @brief Represents a pair of integers.
+   *        first: berth id
+   *        second: cost
+   */
+  std::pair<int, int> get_minimum_berth_cost(const Point &p) {
+    int min_cost = 999999;
+    int min_berth_id = 0;
+    for (int i = 0; i < BERTH_NUM; i++) {
+      auto cur_cost = get_cost_from_berth_to_point(i, p);
+      if (cur_cost.has_value()) {
+        if (cur_cost.value() < min_cost) {
+          min_cost = cur_cost.value();
+          min_berth_id = i;
+        }
+      }
+    }
+    return {min_berth_id, min_cost};
+  }
 
   std::optional<int> get_cost_from_berth_to_point(const int berth_id,
                                                   const Point &to) {
@@ -123,12 +162,20 @@ public:
     return path;
   }
 
-  void print_final_info() {
-
+  void print_goods_info() {
     log_info("total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
              "goted_goods_money:%d,selled_goods_num:%d,selled_goods_money:%d",
              total_goods_num, total_goods_money, goted_goods_num,
              goted_goods_money, selled_goods_num, selled_goods_money);
+    log_info("total_goods_avg_money:%d,goted_goods_avg_money:%d,selled_goods_"
+             "avg_money:%d",
+             total_goods_avg_money(), goted_goods_avg_money(),
+             selled_goods_avg_money());
+  }
+
+  void print_final_info() {
+
+    print_goods_info();
 
     for (auto &berth : berths) {
       berth.print();
@@ -156,7 +203,25 @@ public:
                berths[i].id, berths[i].pos.x, berths[i].pos.y,
                berths[i].transport_time, berths[i].loading_speed);
     }
-    log_info("Berths initialized");
+
+    // 计算 transport_time 平均数
+    int transport_time_sum = 0;
+    int loading_speed_sum = 0;
+    for (int i = 0; i < BERTH_NUM; i++) {
+      transport_time_sum += berths[i].transport_time;
+      loading_speed_sum += berths[i].loading_speed;
+    }
+    float transport_time_avg =
+        static_cast<float>(transport_time_sum) / BERTH_NUM;
+    float loading_speed_avg = static_cast<float>(loading_speed_sum) / BERTH_NUM;
+
+    for (int i = 0; i < BERTH_NUM; i++) {
+      berths[i].avg_berth_transport_time = static_cast<int>(transport_time_avg);
+      berths[i].avg_berth_loading_speed = loading_speed_avg;
+    }
+
+    log_info("Berths initialized,transport_time_avg:%f,loading_speed_avg:%f",
+             transport_time_avg, loading_speed_avg);
   }
   void berths_come_from_init() {
     for (int i = 0; i < BERTH_NUM; i++) {
@@ -220,7 +285,7 @@ public:
   std::vector<Point> get_near_berth_path(const Point &from, int &berth_id,
                                          bool &founded) {
     std::vector<Point> path;
-    float select_dis = 444444.f;
+    int select_dis = 444444;
     int min_berth_id = 0;
     bool found_path = false;
     // 只要能到达任意一个港口就行
@@ -229,8 +294,6 @@ public:
       auto cur_path = get_berth_path(i, from, found_path);
       auto &cur_berth = berths[i];
       if (found_path) {
-        // float w1 = cur_berth.calc_berth_wight(from);
-        // float f_dif = cur_berth.near_goods_value;
 
         if (cur_path.size() < select_dis) {
           select_dis = cur_path.size();
@@ -247,27 +310,48 @@ public:
     return path;
   }
 
-  std::vector<Point>
-  get_near_berth_path_exclude(const int robot_id, const Point &from,
-                              int &berth_id, bool &founded,
-                              std::array<int, ROBOT_NUM> &visit) {
+  std::vector<Point> get_near_berth_path_v1(const Point &from, int &berth_id,
+                                            bool &founded) {
+    std::vector<Point> path;
+    float final_wight = 444444.f;
+    int min_berth_id = 0;
+    bool found_path = false;
+    // 只要能到达任意一个港口就行
+    for (int i = 0; i < BERTH_NUM; i++) {
+      Point berth_pos = Point(berths[i].pos.x + 1, berths[i].pos.y + 1);
+      auto cur_path = get_berth_path(i, from, found_path);
+      auto &cur_berth = berths[i];
+      if (found_path) {
+        float berth_wight = cur_berth.calc_berth_wight(from); // 越大越好
+        float cur_wight =
+            static_cast<float>(cur_path.size() + 1) / berth_wight; // 越小越好
+
+        if (cur_wight < final_wight) {
+          final_wight = cur_wight;
+          min_berth_id = i;
+          path = cur_path;
+          founded = true;
+        }
+      }
+    }
+    berth_id = min_berth_id;
+    log_info("from(%d,%d) to berth[%d] (%d,%d) size:%d", from.x, from.y,
+             min_berth_id, berths[min_berth_id].pos.x + 1,
+             berths[min_berth_id].pos.y + 1, path.size());
+    return path;
+  }
+
+  std::vector<Point> get_near_berth_path_exclude(const Point &from,
+                                                 int &berth_id, bool &founded,
+                                                 std::vector<int> &visit) {
     std::vector<Point> path;
     int min_dis = 999999;
     int min_berth_id = std::rand() % BERTH_NUM;
     bool found_path = false;
 
-    std::vector<int> visit_berth;
-
-    for (int i = 0; i < ROBOT_NUM; i++) {
-      if (i == robot_id) {
-        continue;
-      }
-      visit_berth.push_back(visit[i]);
-    }
-
     // 只要能到达任意一个港口就行
     for (int i = 0; i < ROBOT_NUM; i++) {
-      if (std::any_of(visit_berth.begin(), visit_berth.end(),
+      if (std::any_of(visit.begin(), visit.end(),
                       [i](int v) { return v == i; })) {
         continue;
       }
@@ -285,7 +369,7 @@ public:
     }
 
     berth_id = min_berth_id;
-    visit[robot_id] = min_berth_id;
+    visit.push_back(min_berth_id);
     log_info("from(%d,%d) to berth[%d] (%d,%d) size:%d", from.x, from.y,
              min_berth_id, berths[min_berth_id].pos.x + 1,
              berths[min_berth_id].pos.y + 1, path.size());

@@ -13,6 +13,8 @@ public:
   int berth_wait_cycle; // 等待进入泊位的周期数
   int goods_wait_cycle; // 在泊位等待货物的周期数
 
+  bool has_change_berth; // 是否已经换泊位,即在泊位中移动
+
   int cur_capacity; // 当前载重量
   int cur_value;    // 当前价值
 

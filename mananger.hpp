@@ -26,7 +26,7 @@ public:
 
   void berth_cycle() {
     for (int i = 0; i < BERTH_NUM; i++) {
-      io_layer.berths[i].clear_goods_info();
+      io_layer.berths[i].tick(io_layer.cur_cycle);
     }
     for (const auto &goods : map_goods_list) {
       if (goods.second.status == GoodsStatus::Normal) {
@@ -56,33 +56,18 @@ public:
     log_assert(path_size > 0, "error, path_size is 0");
     log_assert(goods.money > 0, "error, goods.money is 0");
 
-    int to_berth_path_size = 999999;
-    for (int i = 0; i < BERTH_NUM; i++) {
-      if (io_layer.berths_come_from[i].find(goods.pos) !=
-          io_layer.berths_come_from[i].end()) {
-
-        float_t trans_wight = io_layer.berths[i].transport_time / 1000.0;
-        float_t load_wight = 2.0 / io_layer.berths[i].loading_speed;
-
-        float_t cur_berth_weight =
-            io_layer.berths_come_from[i].at(goods.pos).cost * trans_wight *
-            load_wight;
-
-        to_berth_path_size =
-            std::min(to_berth_path_size, static_cast<int>(cur_berth_weight));
-      }
-    }
-
-    log_assert(to_berth_path_size != 999999, "error, to_berth_path_size is 0");
-
-    return ((goods.money) * 1024) / (path_size + to_berth_path_size);
+    return ((goods.money) * 1024) / (path_size);
   }
 
   std::pair<Goods, std::vector<Point>>
   find_best_goods_path_from_berth_v1(const int berth_id, bool &founded) {
 
-    Goods goods_final = invalid_goods;
-    int max_weight = -1;
+    // 查找到最优的高于平均值的货物
+    Goods goods_final_hi = invalid_goods;
+    int max_weight_hi = -1;
+    // 查找到最优的低于平均值的货物
+    Goods goods_final_lo = invalid_goods;
+    int max_weight_lo = -1;
 
     bool success = false;
     // 遍历所有的货物,找到最有价值的货物
@@ -95,27 +80,56 @@ public:
           continue;
         }
 
-        auto cur_path_cost =
+        // 从港口到货物的路径距离
+        const auto to_goods_path_cost =
             io_layer.berths_come_from[berth_id].at(goods.second.pos).cost;
 
-        // 判断是否能在货物消失之前拿到货物
+        // 判断是否能在货物消失之前拿到货物， + 5 是为了给 cut path 预留时间容错
         const bool can_fetch_goods = !goods.second.is_disappeared(
-            io_layer.cur_cycle + cur_path_cost + 5);
-
+            io_layer.cur_cycle + to_goods_path_cost + 8);
         if (!can_fetch_goods) {
           continue;
         }
+        // 货物还剩多久消失
+        const int goods_remin_time =
+            (goods.second.end_cycle - io_layer.cur_cycle);
 
-        int cur_weight = calc_goods_weight(goods.second, cur_path_cost);
-        // int cur_weight = goods.second.money * 1024 / cur_path_cost;
-        if (cur_weight > max_weight) {
-          max_weight = cur_weight;
-          // cur_path = path_tmp;
-          goods_final = goods.second;
-          founded = true;
+        // 从货物到港口的最短路径
+        const auto to_berth_path_cost =
+            io_layer.get_minimum_berth_cost(goods.first);
+
+        int test_w;
+
+        if (io_layer.cur_cycle < 13000) {
+          test_w = to_goods_path_cost + to_berth_path_cost.second +
+                   goods_remin_time / 10;
+        } else {
+          test_w = to_goods_path_cost + to_berth_path_cost.second;
+        }
+
+        // 越大越好
+        int cur_weight = calc_goods_weight(goods.second, test_w);
+
+        // 分别找到高于平均值和低于平均值的货物
+        if (goods.second.money >= io_layer.total_goods_avg_money()) {
+          // if (true) {
+          if (cur_weight > max_weight_hi) {
+            max_weight_hi = cur_weight;
+            goods_final_hi = goods.second;
+            founded = true;
+          }
+        } else {
+          if (cur_weight > max_weight_lo) {
+            max_weight_lo = cur_weight;
+            goods_final_lo = goods.second;
+            founded = true;
+          }
         }
       }
     }
+
+    const auto &goods_final =
+        max_weight_hi != -1 ? goods_final_hi : goods_final_lo;
 
     auto path_tmp = io_layer.get_path_from_berth_to_point(
         berth_id, goods_final.pos, success);
@@ -128,6 +142,19 @@ public:
   void ship_cycle(const int ship_id) {
     static std::array<bool, 10> berths_visit;
     auto &cur_ship = io_layer.ships[ship_id];
+    auto &cur_berth = io_layer.berths[cur_ship.berth_id];
+
+    auto go_to_virtual_point = [&]() {
+      io_layer.go(ship_id);
+      const int transport_cycle = cur_berth.transport_time;
+      berths_visit[cur_ship.berth_id] = false; // 释放泊位
+      cur_ship.new_inst(transport_cycle);
+      cur_ship.has_change_berth = false;
+      cur_ship.berth_wait_cycle = 0;
+      cur_ship.goods_wait_cycle = 0;
+      log_trace("ship[%d] go to virtual point, transport time %d", ship_id,
+                transport_cycle);
+    };
 
     // 选择价值最高的泊位
     auto select_best_berth = [&]() {
@@ -138,13 +165,14 @@ public:
         if (berths_visit[i] == true) {
           continue;
         }
+        // 选择去价值最高的港口就是最优解
         int value = io_layer.berths[i].goods_value();
-        float_t load_wight = 2.0 / io_layer.berths[i].loading_speed;
-        float_t trans_wight = io_layer.berths[i].transport_time / 1000.0;
-        float_t cur_weight = (value * load_wight * trans_wight);
+        // float_t load_wight = 2.0 / io_layer.berths[i].loading_speed;
+        // float_t trans_wight = io_layer.berths[i].transport_time / 1000.0;
+        // float_t cur_weight = (value * load_wight * trans_wight);
 
-        if (cur_weight > max_value) {
-          max_value = static_cast<int>(cur_weight);
+        if (value > max_value) {
+          max_value = static_cast<int>(value);
           target_berth_id = i;
         }
       }
@@ -154,23 +182,55 @@ public:
     };
 
     auto select_fit_berth = [&]() {
-      int target_berth_id = -1;
-      int fit_dis = 999999;
+      int target_berth_id_hi = -1;
+      int target_berth_id_lo = -1;
+      int fit_dis_hi = 999999;
+      int fit_dis_lo = -200;
+
       const int remine_capacity = cur_ship.capacity - cur_ship.cur_capacity;
       for (int i = 0; i < BERTH_NUM; i++) {
+
+        log_debug("leesum berth[%d] goods_num:%d", i,
+                  io_layer.berths[i].goods_num());
         // 如果泊位已经被占用,则跳过
         if (berths_visit[i] == true) {
           continue;
         }
-        int cur_dis =
-            std::abs(io_layer.berths[i].goods_num() - remine_capacity);
-        if (cur_dis < fit_dis) {
-          fit_dis = cur_dis;
-          target_berth_id = i;
+        int cur_dis = io_layer.berths[i].goods_num() - remine_capacity;
+
+        if (cur_dis < 0) {
+          target_berth_id_lo = cur_dis > fit_dis_lo ? i : target_berth_id_lo;
+          fit_dis_lo = std::max(fit_dis_lo, cur_dis);
+        } else {
+          target_berth_id_hi = cur_dis < fit_dis_hi ? i : target_berth_id_hi;
+          fit_dis_hi = std::min(fit_dis_hi, cur_dis);
         }
+        log_debug("leesum target_berth_id_hi:%d, target_berth_id_lo:%d, cur "
+                  "dis %d                ",
+                  target_berth_id_hi, target_berth_id_lo, cur_dis);
       }
+      int target_berth_id = -1;
+
+      if (std::abs(fit_dis_lo) <= 10) {
+        target_berth_id = target_berth_id_lo;
+      } else {
+        target_berth_id =
+            target_berth_id_hi == -1 ? target_berth_id_lo : target_berth_id_hi;
+      }
+
       log_assert(target_berth_id != -1, "error, target_berth_id is -1");
       return target_berth_id;
+    };
+
+    auto move_to_next_berth = [&](const int next_berth_id) {
+      cur_ship.has_change_berth = true;
+      cur_ship.goods_wait_cycle = 0;
+
+      berths_visit[next_berth_id] = true;
+      berths_visit[cur_ship.berth_id] = false;
+      io_layer.ship(ship_id, next_berth_id);
+      // 泊位之间的移动时间为 500
+      cur_ship.new_inst(500);
     };
 
     if (cur_ship.status == 0) {
@@ -196,9 +256,6 @@ public:
     log_assert(cur_ship.status == 1, "error, ship status error, status:%d",
                cur_ship.status);
 
-    log_debug("ship[%d] is in berth[%d],remine wait time %d", ship_id,
-              cur_ship.berth_id, cur_ship.inst_remine_cycle);
-
     cur_ship.inst_remine_cycle = 0;
 
     if (cur_ship.berth_id == -1) {
@@ -219,8 +276,9 @@ public:
       int transport_cycle = io_layer.berths[target_berth_id].transport_time;
       cur_ship.new_inst(transport_cycle);
 
-      log_trace("ship[%d] go to berth[%d], trans_time ", ship_id,
-                target_berth_id, transport_cycle);
+      log_trace(
+          "ship[%d] will go to berth[%d] from virtual point , trans_time ",
+          ship_id, target_berth_id, transport_cycle);
       return;
     }
 
@@ -230,14 +288,11 @@ public:
 
     if (cur_ship.full()) {
       // 船只已经满载,应该去虚拟点卸货
-      io_layer.go(ship_id);
-      int transport_cycle = io_layer.berths[cur_ship.berth_id].transport_time;
-      cur_ship.new_inst(transport_cycle);
-
-      // 释放泊位
-      berths_visit[cur_ship.berth_id] = false;
-
-      log_info("ship[%d] is full, go", ship_id);
+      go_to_virtual_point();
+      log_info("ship[%d] is full at berth[%d], cur capacity:%d, cur money:%d "
+               "will go to virtual point trans time:%d",
+               ship_id, cur_ship.berth_id, cur_ship.cur_capacity,
+               cur_ship.cur_value, cur_berth.transport_time);
       return;
     }
     if (!cur_ship.full()) {
@@ -248,12 +303,8 @@ public:
       // 当前泊位没有货物,并且剩余时间无法去下一个泊位装货,并去虚拟点卸货,停留在当前泊位
       // 4.
       // 当前泊位没有货物,并且剩余时间可以去下一个泊位装货,并且去虚拟点卸货,移动到下一个泊位
-      auto &cur_berth = io_layer.berths[cur_ship.berth_id];
       const int cur_transport_time = cur_berth.transport_time;
-      const int remine_time = 15000 - (io_layer.cur_cycle + 1);
-
-      log_debug("cur_cycle:%d, remine_time:%d, cur_transport_time:%d",
-                io_layer.cur_cycle, remine_time, cur_transport_time);
+      const int remine_time = 15000 - (io_layer.cur_cycle);
 
       if ((remine_time - cur_transport_time) < 1) {
         // 必须出发去虚拟点卸货了
@@ -261,9 +312,8 @@ public:
             "ship[%d] don't have enough time to move to next berth[%d], go "
             "to virtual point,remin_time:%d, cur_transport_time:%d",
             ship_id, cur_ship.berth_id, remine_time, cur_transport_time);
-        io_layer.go(ship_id);
-        int transport_cycle = io_layer.berths[cur_ship.berth_id].transport_time;
-        cur_ship.new_inst(transport_cycle);
+
+        go_to_virtual_point();
         return;
       }
 
@@ -279,19 +329,50 @@ public:
             io_layer.berths[new_select_berth_id].transport_time + 500;
         // 3. 如果剩余时间不足以去下一个泊位装货,停留在当前泊位
         if (remine_time > (next_transport_time + 1)) {
-          // 足够时间去下一个泊位装货
-          // if (cur_ship.good_wait_tolong() && cur_ship.capacity_percent() < 80) {
-            cur_ship.goods_wait_cycle = 0;
-            log_trace("ship[%d] wait too long in berth[%d], go to "
-                      "berth[%d],remin_time:%d, next_transport_time:%d",
-                      ship_id, cur_ship.berth_id, new_select_berth_id,
-                      remine_time, next_transport_time);
-            berths_visit[new_select_berth_id] = true;
-            berths_visit[cur_ship.berth_id] = false;
-            io_layer.ship(ship_id, new_select_berth_id);
-            // 泊位之间的移动时间为 500
-            cur_ship.new_inst(500);
-            return;
+
+          cur_ship.has_change_berth = true;
+          cur_ship.goods_wait_cycle = 0;
+          log_trace("ship[%d] wait too long in berth[%d], go to "
+                    "berth[%d],remin_time:%d, next_transport_time:%d",
+                    ship_id, cur_ship.berth_id, new_select_berth_id,
+                    remine_time, next_transport_time);
+
+          move_to_next_berth(new_select_berth_id);
+
+          // if (cur_ship.good_wait_tolong()) {
+
+          //   cur_ship.has_change_berth = true;
+          //   cur_ship.goods_wait_cycle = 0;
+          //   log_trace("ship[%d] wait too long in berth[%d], go to "
+          //             "berth[%d],remin_time:%d, next_transport_time:%d",
+          //             ship_id, cur_ship.berth_id, new_select_berth_id,
+          //             remine_time, next_transport_time);
+          //   berths_visit[new_select_berth_id] = true;
+          //   berths_visit[cur_ship.berth_id] = false;
+          //   io_layer.ship(ship_id, new_select_berth_id);
+          //   // 泊位之间的移动时间为 500
+          //   cur_ship.new_inst(500);
+
+          //   // // 足够时间去下一个泊位装货
+          //   // if (cur_ship.capacity_percent() < 70 &&
+          //   //     !cur_ship.has_change_berth) {
+          //   //   cur_ship.has_change_berth = true;
+          //   //   cur_ship.goods_wait_cycle = 0;
+          //   //   log_trace("ship[%d] wait too long in berth[%d], go to "
+          //   //             "berth[%d],remin_time:%d, next_transport_time:%d",
+          //   //             ship_id, cur_ship.berth_id, new_select_berth_id,
+          //   //             remine_time, next_transport_time);
+          //   //   berths_visit[new_select_berth_id] = true;
+          //   //   berths_visit[cur_ship.berth_id] = false;
+          //   //   io_layer.ship(ship_id, new_select_berth_id);
+          //   //   // 泊位之间的移动时间为 500
+          //   //   cur_ship.new_inst(500);
+          //   //   return;
+          //   // } else if (cur_ship.has_change_berth) {
+          //   //   go_to_virtual_point();
+          //   // } else if (cur_ship.capacity_percent() >= 70) {
+          //   //   go_to_virtual_point();
+          //   // }
           // }
 
         } else {
@@ -318,8 +399,8 @@ public:
           log_trace("ship[%d] load goods  money:%d", ship_id, goods.money);
           load_size--;
         }
+        // 同一帧是否可以出发去卸货, 不可以
       }
-
       return;
     }
   }
@@ -415,47 +496,6 @@ public:
       }
     };
 
-    // 让机器人循环去靠泊点
-    auto go_to_berth = [&](const int robot_id, int &berth_id,
-                           std::vector<Point> &robot_path) {
-      if (!robots_has_goods[robot_id]) {
-        log_trace("robot[%d] has no goods, no need go_to_berth", robot_id);
-        // 机器人没有货物,不需要去靠泊点
-        return;
-      }
-
-      const Point &robot_pos = robots_cur_pos_list[robot_id];
-      log_trace("robot[%d] berth_id:%d robot (%d,%d)", robot_id, berth_id,
-                P_ARG(robot_pos));
-
-      if (robot_path.empty()) {
-        berth_id = (berth_id + std::rand()) % BERTH_NUM;
-        bool founded = false;
-        auto path = io_layer.get_berth_path(berth_id, robot_pos, founded);
-        log_debug("berth[%d], come_from size %d", berth_id,
-                  io_layer.berths_come_from[berth_id].size());
-
-        if (founded) {
-          log_info("berth[%d] (%d,%d)path size:%d", berth_id,
-                   io_layer.berths.at(berth_id).pos.x + 1,
-                   io_layer.berths.at(berth_id).pos.y + 1, path.size());
-          robot_path = path;
-        } else {
-          // 一定可以找到路径, 如果找不到路径,则机器人被困住了
-          log_trace("robot[%d] (%d,%d) not found path to berth[%d], is dead!",
-                    robot_id, P_ARG(robot_pos), berth_id);
-
-          robots_is_dead[robot_id] = true;
-        }
-      }
-
-      // io_layer.berths[berth_id].in_berth_area(robot_pos)
-
-      if (!robot_path.empty()) {
-        robots_next_pos_list.at(robot_id) = robot_path.back();
-      }
-    };
-
     // ---------------------------------------
     // 障碍物检测
     // 1. 地图障碍物
@@ -543,7 +583,8 @@ public:
               BFS::get_path(robot_cur_pos, random_point, come_from_t, success2);
 
           if (path_last.empty()) {
-            // 找不到路就停止,可能会死锁? (可以优化吗, 再次寻小路去周围的空地?)
+            // 找不到路就停止,可能会死锁? (可以优化吗,
+            // 再次寻小路去周围的空地?)
             log_info("robot[%d] new path not found, stop move", robot_id);
             robots_next_pos_list.at(robot_id) = Point();
           } else {
@@ -595,6 +636,8 @@ public:
       // }
     };
 
+    std::vector<int> cycle1_berths_visit;
+
     auto find_new_goods = [&](int robot_id) {
       // 机器人位置位置信息
       auto &cur_robot_target_goods = robots_target_goods_list[robot_id];
@@ -604,6 +647,24 @@ public:
       if (robots_target_goods_list[robot_id].status == GoodsStatus::Got) {
         // 机器人已经拿到货物,应该去卸货
         return;
+      }
+
+      if (io_layer.cur_cycle == 1) {
+        bool cycle1_founded = false;
+        int cycle1_near_berth_id;
+        auto near_path = io_layer.get_near_berth_path_exclude(
+            robot_pos, cycle1_near_berth_id, cycle1_founded,
+            cycle1_berths_visit);
+
+        if (cycle1_founded) {
+          robots_path_list[robot_id] = near_path;
+          robots_idle_cycle[robot_id] = near_path.size();
+        } else {
+          // 一定可以找到路径, 如果找不到路径,则机器人被困住了
+          log_trace("robot[%d] (%d,%d) not found path to berth, is dead!",
+                    robot_id, P_ARG(robot_pos));
+          // robots_is_dead[robot_id] = true;
+        }
       }
 
       // if (io_layer.cur_cycle < 20) {
@@ -670,6 +731,7 @@ public:
         log_assert(search_berth_id >= 0 && search_berth_id < BERTH_NUM,
                    "error, search_berth_id is invalid");
         bool search_founded = false;
+
         auto search_result =
             find_best_goods_path_from_berth_v1(search_berth_id, search_founded);
 
@@ -714,8 +776,8 @@ public:
 
       bool near_founded = false;
       int near_berth_id;
-      auto near_path =
-          io_layer.get_near_berth_path(robot_pos, near_berth_id, near_founded);
+      auto near_path = io_layer.get_near_berth_path_v1(robot_pos, near_berth_id,
+                                                       near_founded);
 
       if (near_founded) {
         robots_path_list[robot_id] = near_path;
@@ -771,13 +833,14 @@ public:
         // 3. 机器人的路径
         // map_goods_list.at(target_goods.pos) = invalid_goods;
 
-        io_layer.berths[berth_id_opt.value()].add_goods(target_goods);
+        io_layer.berths[berth_id_opt.value()].add_goods(target_goods,
+                                                        io_layer.cur_cycle);
         robots_target_goods_list[robot_id] = invalid_goods;
         robots_path_list[robot_id].clear();
       }
     };
 
-    auto robots_pull_get_cycle = [&](const int robot_id) {
+    auto robots_get_cycle = [&](const int robot_id) {
       const auto &cur_pos = robots_cur_pos_list[robot_id];
       auto &cur_berth = io_layer.berths[berths_id_list[robot_id]];
       auto &target_goods = robots_target_goods_list[robot_id];
@@ -804,36 +867,6 @@ public:
       }
       log_assert(target_goods.status != GoodsStatus::Normal,
                  "goods states error");
-
-      // auto berth_id_opt = io_layer.in_berth_area(cur_pos);
-
-      // if (berth_id_opt.has_value() && had_goods) {
-
-      //   log_trace("robot[%d] pull goods at (%d,%d)", robot_id,
-      //             P_ARG(target_goods.pos));
-      //   log_trace(
-      //       "robot[%d] goods money:%d,cur_cycle:%d end_cycle:%d, status:%d",
-      //       robot_id, target_goods.money, io_layer.cur_cycle,
-      //       target_goods.end_cycle, target_goods.status);
-
-      //   // 卸货要求
-      //   // 1. 机器人已经到达靠泊点
-      //   // 2. 机器人已经拿到货物
-      //   // 3. 机器人有预定的货物
-      //   io_layer.robot_pull(robot_id);
-      //   io_layer.goted_goods_num++;
-      //   io_layer.goted_goods_money += target_goods.money;
-
-      //   // 清空状态位
-      //   // 1. 机器人的目标货物
-      //   // 2. 地图上的货物
-      //   // 3. 机器人的路径
-      //   // map_goods_list.at(target_goods.pos) = invalid_goods;
-
-      //   io_layer.berths[berth_id_opt.value()].add_goods(target_goods);
-      //   robots_target_goods_list[robot_id] = invalid_goods;
-      //   robots_path_list[robot_id].clear();
-      // }
 
       if (target_goods.status == GoodsStatus::Booked && !had_goods) {
         if (cur_pos == target_goods.pos) {
@@ -894,7 +927,7 @@ public:
         if (robots_is_dead[i]) {
           continue;
         }
-        robots_pull_get_cycle(i);
+        robots_get_cycle(i);
       }
 
       for (int i = 0; i < ROBOT_NUM; i++) {
@@ -936,12 +969,7 @@ public:
       }
       io_layer.output_cycle();
       log_info("map_goods_list size:%d", map_goods_list.size());
-
-      log_info("total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
-               "goted_goods_money:%d,selled_goods_num:%d,selled_goods_money:%d",
-               io_layer.total_goods_num, io_layer.total_goods_money,
-               io_layer.goted_goods_num, io_layer.goted_goods_money,
-               io_layer.selled_goods_num, io_layer.selled_goods_money);
+      io_layer.print_goods_info();
 
       if (abs(io_layer.cur_cycle) == 15000) {
         break;

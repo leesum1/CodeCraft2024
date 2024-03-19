@@ -3,9 +3,14 @@
 
 #include "log.h"
 #include "mananger.hpp"
+#include "config.h"
+
 
 int main() {
+
+#ifdef LOG_ENABLE
   log_init("log.txt", 6);
+#endif
 
   static int goods_count = 0;
 
@@ -20,21 +25,6 @@ int main() {
 
     log_fatal("exception:%s", e.what());
   }
-  // try {
-  //   for (int zhen = 1; zhen <= 15000; zhen++) {
-  //     io_layer.input_cycle();
-  //     io_layer.output_cycle();
-  //   }
-  // } catch (const std::exception &e) {
-
-  //   log_fatal("exception:%s", e.what());
-  // }
-
-  // log_info("goods_count:%d\n", goods_count);
-
-  // #include "test.h"
-  //   a_star_test2();
-  // io_layer_test();
 
   return 0;
 }

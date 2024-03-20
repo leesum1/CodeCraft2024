@@ -19,6 +19,7 @@ public:
   int cur_value;    // 当前价值
 
   int inst_remine_cycle; // 当前指令剩余周期
+  int spend_cycle;       // 当前周期花费
 
   bool good_wait_tolong() { return this->goods_wait_cycle > 50; }
   int capacity_percent() { return this->cur_capacity * 100 / this->capacity; }
@@ -61,5 +62,6 @@ public:
     this->cur_value = 0;
     this->goods_wait_cycle = 0;
     this->inst_remine_cycle = 0;
+    this->spend_cycle = 0;
   }
 };

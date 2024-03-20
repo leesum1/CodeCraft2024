@@ -2,6 +2,7 @@
 #include "log.h"
 #include "point.hpp"
 #include <algorithm>
+#include <cstring>
 #include <functional>
 #include <queue>
 #include <unordered_map>
@@ -10,6 +11,59 @@
 class PATHHelper {
 
 public:
+  static std::vector<Point>
+  bfs_path_v1(const Point &start, std::function<bool(Point)> goal,
+              std::function<bool(Point)> is_barrier,
+              std::function<std::vector<Point>(Point)> neighbors, int max_level,
+              bool &founded) {
+    std::queue<Point> q;
+    q.push(start);
+    static bool visited[200][200];
+    static Point come_from[200][200];
+    memset(visited, 0, sizeof(visited));
+    memset(come_from, 0, sizeof(come_from));
+
+    visited[start.x][start.y] = true;
+    Point goal_point;
+
+    int search_level = 0;
+    while (!q.empty() && search_level < max_level) {
+      int cur_level_size = q.size();
+      // log_debug("cur_level_size:%d", cur_level_size);
+      for (int i = 0; i < cur_level_size; i++) {
+        Point cur = q.front();
+        if (goal(cur)) {
+          founded = true;
+          goal_point = cur;
+          goto bfs_path_v1_end;
+        }
+        q.pop();
+        for (auto &next : neighbors(cur)) {
+          if (is_barrier(next) || visited[next.x][next.y]) {
+            continue;
+          }
+          visited[next.x][next.y] = true;
+          q.push(next);
+          come_from[next.x][next.y] = cur;
+        }
+      }
+      search_level++;
+    }
+
+  bfs_path_v1_end:
+    if (founded) {
+      std::vector<Point> path;
+      Point cur = goal_point;
+      while (cur != start) {
+        path.push_back(cur);
+        cur = come_from[cur.x][cur.y];
+      }
+      return path;
+    } else {
+      return std::vector<Point>();
+    }
+  }
+
   static std::unordered_map<Point, PointCost>
   cut_path(const Point &start, std::function<bool(Point)> is_barrier,
            std::function<std::vector<Point>(Point)> neighbors,
@@ -50,7 +104,8 @@ public:
           if (i == path.size() - 1) {
             // log_assert(cur_path.back() == Goal,
             //            "path.at(i) == Goal,back:(%d,%d),Goal:(%d,%d)",
-            //            cur_path.back().x, cur_path.back().y, Goal.x, Goal.y);
+            //            cur_path.back().x, cur_path.back().y, Goal.x,
+            //            Goal.y);
           }
           cur_path.pop_back();
         }

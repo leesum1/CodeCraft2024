@@ -5,6 +5,7 @@
 #include "point.hpp"
 #include <algorithm>
 #include <list>
+#include <regex>
 #include <utility>
 struct Berth {
   Point pos;
@@ -59,7 +60,7 @@ struct Berth {
     float trans_w =
         avg_berth_transport_time / (float)transport_time; // 越大越好
     float load_w = (float)loading_speed / avg_berth_loading_speed; // 越大越好
-    
+
     return avg_berth_transport_time;
   }
 
@@ -68,6 +69,22 @@ struct Berth {
     int sum = 0;
     std::for_each(goods_list.begin(), goods_list.end(),
                   [&sum](const Goods &g) { sum += g.money; });
+    return sum;
+  }
+
+  int get_goods_value_sum_n(int n) {
+    int sum = 0;
+    auto it = goods_list.begin();
+    const int max_n = std::min(n, (int)goods_list.size());
+
+    for (int i = 0; i < max_n; i++) {
+      sum += it->money;
+      it++;
+    }
+    if (max_n < n) {
+      sum += (money_in_1000cycle() / 2); // 加上增长趋势
+    }
+
     return sum;
   }
 

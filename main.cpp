@@ -1,9 +1,8 @@
 #include <cstdio>
 
+#include "config.h"
 #include "log.h"
 #include "mananger.hpp"
-#include "config.h"
-
 
 int main() {
 

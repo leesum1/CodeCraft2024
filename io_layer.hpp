@@ -11,10 +11,10 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <optional>
 #include <stdio.h>
@@ -52,8 +52,13 @@ public:
   int cur_cycle = 0;                               // 当前周期
   int cur_money = 0;                               // 当前金钱
 
+  bool final_time = false; // 到最后的时间后,机器人之往指定的港口运输货物
+
   // 港口打表
   std::array<std::unordered_map<Point, PointCost>, 10> berths_come_from;
+
+  // 港口打表2
+  std::array<std::unordered_map<Point, PointCost>, 10> berths_come_from2;
   // 机器人初始位置打表
   std::array<std::unordered_map<Point, PointCost>, 10>
       robots_first_pos_come_from;
@@ -72,6 +77,28 @@ public:
 
   explicit IoLayer() {}
   ~IoLayer(){};
+
+  bool berth_is_baned(const int berth_id) {
+    // 到了最后时刻,只能往指定的港口运输货物
+    if (final_time) {
+      std::vector<int> final_berth;
+      // 将还能动的船的目的地加入
+      for (int i = 0; i < SHIP_NUM; i++) {
+        if (ships[i].berth_id != -1) {
+          final_berth.push_back(ships[i].berth_id);
+        }
+      }
+      if (!berths[berth_id].is_baned) {
+        bool in_final_berth =
+            std::any_of(final_berth.begin(), final_berth.end(),
+                        [berth_id](int v) { return v == berth_id; });
+        return !in_final_berth;
+      }
+      return true;
+    }
+
+    return berths[berth_id].is_baned;
+  }
 
   int total_goods_avg_money() {
     if (total_goods_num == 0) {
@@ -114,7 +141,7 @@ public:
 
   std::optional<int> get_cost_from_berth_to_point(const int berth_id,
                                                   const Point &to) {
-    Point berth_pos =
+    const Point &berth_pos =
         Point(berths[berth_id].pos.x + 1, berths[berth_id].pos.y + 1);
 
     auto &cur_berth_com_from = berths_come_from[berth_id];
@@ -129,7 +156,7 @@ public:
   std::vector<Point> get_path_from_berth_to_point(const int berth_id,
                                                   const Point &to,
                                                   bool &founded) {
-    Point berth_pos =
+    const Point &berth_pos =
         Point(berths[berth_id].pos.x + 1, berths[berth_id].pos.y + 1);
     auto path = PATHHelper::get_path(berth_pos, to, berths_come_from[berth_id],
                                      founded);
@@ -145,9 +172,9 @@ public:
       assert(false);
     }
     // find the path
-    Point berth_pos =
+    const Point &berth_pos =
         Point(berths[berth_id].pos.x + 1, berths[berth_id].pos.y + 1);
-    Point goal_pos = from;
+    const Point &goal_pos = from;
 
     auto path = PATHHelper::get_path(berth_pos, goal_pos,
                                      berths_come_from[berth_id], founded);
@@ -169,6 +196,10 @@ public:
   }
 
   void print_goods_info() {
+    for (int i = 0; i < BERTH_NUM; i++) {
+      log_info("cur_goods_num:%d,cur_goods_value:%d", berths[i].goods_num(),
+               berths[i].goods_value());
+    }
     log_info("total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
              "goted_goods_money:%d,selled_goods_num:%d,selled_goods_money:%d",
              total_goods_num, total_goods_money, goted_goods_num,
@@ -237,19 +268,21 @@ public:
   }
   void berths_come_from_init() {
     for (int i = 0; i < BERTH_NUM; i++) {
-      const Point &start = Point(berths[i].pos.x + 1, berths[i].pos.y + 1);
+      const Point &start1 = Point(berths[i].pos.x + 1, berths[i].pos.y + 1);
 
       auto is_barrier = [&](const Point &p) { return game_map.is_barrier(p); };
       auto neighbors = [&](const Point &p) { return game_map.neighbors(p); };
 
       berths_come_from[i] =
-          PATHHelper::bfs_search(start, ([&](Point p) { return false; }),
+          PATHHelper::bfs_search(start1, ([&](Point p) { return false; }),
                                  is_barrier, neighbors, 300000);
     }
     log_info("berths_come_from initialized");
     for (int i = 0; i < BERTH_NUM; i++) {
       log_info("berth[%d] come from map size: %d", i,
                berths_come_from[i].size());
+      log_info("berth[%d] come from2 map size: %d", i,
+               berths_come_from2[i].size());
     }
   }
 
@@ -271,54 +304,68 @@ public:
     }
   }
 
-  std::vector<Point> get_berth_path(const int berth_id, const Point &from,
-                                    bool &founded) {
-    if (berth_id < 0 || berth_id >= BERTH_NUM) {
-      log_fatal("berth id out of range, expect 0~%d, actual:%d", BERTH_NUM,
-                berth_id);
-      assert(false);
-    }
-    // find the path
-    Point berth_pos =
-        Point(berths[berth_id].pos.x + 1, berths[berth_id].pos.y + 1);
-    Point goal_pos = from;
+  // std::vector<Point> get_berth_path(const int berth_id, const Point &from,
+  //                                   bool &founded) {
+  //   if (berth_id < 0 || berth_id >= BERTH_NUM) {
+  //     log_fatal("berth id out of range, expect 0~%d, actual:%d", BERTH_NUM,
+  //               berth_id);
+  //     assert(false);
+  //   }
 
-    auto path = PATHHelper::get_path_reverse(
-        berth_pos, goal_pos, berths_come_from[berth_id], founded);
+  //   std::vector<Point> path;
+  //   Point goal_pos = from;
 
-    log_info("berth[%d] (%d,%d) to (%d,%d) size:%d", berth_id, P_ARG(berth_pos),
-             P_ARG(goal_pos), path.size());
+  //   if (std::rand() % 2 == 0) {
+  //     // find the path
+  //     Point berth_pos =
+  //         Point(berths[berth_id].pos.x + 1, berths[berth_id].pos.y + 1);
 
-    return path;
-  }
+  //     path = PATHHelper::get_path_reverse(berth_pos, goal_pos,
+  //                                         berths_come_from[berth_id],
+  //                                         founded);
+  //   } else {
+  //     // find the path
+  //     Point berth_pos =
+  //         Point(berths[berth_id].pos.x + 3, berths[berth_id].pos.y + 3);
 
-  std::vector<Point> get_near_berth_path(const Point &from, int &berth_id,
-                                         bool &founded) {
-    std::vector<Point> path;
-    int select_dis = 444444;
-    int min_berth_id = 0;
-    bool found_path = false;
-    // 只要能到达任意一个港口就行
-    for (int i = 0; i < BERTH_NUM; i++) {
-      Point berth_pos = Point(berths[i].pos.x + 1, berths[i].pos.y + 1);
-      auto cur_path = get_berth_path(i, from, found_path);
-      auto &cur_berth = berths[i];
-      if (found_path) {
+  //     path = PATHHelper::get_path_reverse(berth_pos, goal_pos,
+  //                                         berths_come_from2[berth_id],
+  //                                         founded);
+  //   }
 
-        if (cur_path.size() < select_dis) {
-          select_dis = cur_path.size();
-          min_berth_id = i;
-          path = cur_path;
-          founded = true;
-        }
-      }
-    }
-    berth_id = min_berth_id;
-    log_info("from(%d,%d) to berth[%d] (%d,%d) size:%d", from.x, from.y,
-             min_berth_id, berths[min_berth_id].pos.x + 1,
-             berths[min_berth_id].pos.y + 1, path.size());
-    return path;
-  }
+  //   return path;
+  // }
+
+  // std::vector<Point> get_near_berth_path(const Point &from, int &berth_id,
+  //                                        bool &founded) {
+  //   std::vector<Point> path;
+  //   int select_dis = 444444;
+  //   int min_berth_id = 0;
+  //   bool found_path = false;
+  //   // 只要能到达任意一个港口就行
+  //   for (int i = 0; i < BERTH_NUM; i++) {
+  //     if (berths[i].is_baned) {
+  //       continue;
+  //     }
+  //     Point berth_pos = Point(berths[i].pos.x + 1, berths[i].pos.y + 1);
+  //     auto cur_path = get_berth_path(i, from, found_path);
+  //     auto &cur_berth = berths[i];
+  //     if (found_path) {
+
+  //       if (cur_path.size() < select_dis) {
+  //         select_dis = cur_path.size();
+  //         min_berth_id = i;
+  //         path = cur_path;
+  //         founded = true;
+  //       }
+  //     }
+  //   }
+  //   berth_id = min_berth_id;
+  //   log_info("from(%d,%d) to berth[%d] (%d,%d) size:%d", from.x, from.y,
+  //            min_berth_id, berths[min_berth_id].pos.x + 1,
+  //            berths[min_berth_id].pos.y + 1, path.size());
+  //   return path;
+  // }
 
   std::vector<Point> get_near_goods_path_from_robot_init_pos(const int robot_id,
                                                              bool &founded) {
@@ -354,6 +401,14 @@ public:
     return path;
   }
 
+  /**
+   * @brief 获得离机器人最近的港口路径
+   *
+   * @param from 机器人位置
+   * @param berth_id 返回的港口id
+   * @param founded  是否找到路径
+   * @return std::vector<Point> 返回的路径
+   */
   std::vector<Point> get_near_berth_path_v1(const Point &from, int &berth_id,
                                             bool &founded) {
     std::vector<Point> path;
@@ -362,8 +417,11 @@ public:
     bool found_path = false;
     // 只要能到达任意一个港口就行
     for (int i = 0; i < BERTH_NUM; i++) {
+      if (berth_is_baned(i)) {
+        continue;
+      }
       Point berth_pos = Point(berths[i].pos.x + 1, berths[i].pos.y + 1);
-      auto cur_path = get_berth_path(i, from, found_path);
+      auto cur_path = get_path_from_point_to_berth(i, from, found_path);
       auto &cur_berth = berths[i];
       if (found_path) {
         float berth_wight = cur_berth.calc_berth_wight(from); // 越大越好
@@ -385,6 +443,67 @@ public:
     return path;
   }
 
+  /**
+   * @brief 获得最富有的港口(港口周围很多货还没有搬)路径
+   *
+   * @param from 机器人位置
+   * @param berth_id 返回的港口id
+   * @param founded  是否找到路径
+   * @return std::vector<Point> 返回的路径
+   */
+  std::vector<Point> get_rich_berth_path(const Point &from, int &berth_id,
+                                         bool &founded) {
+    std::vector<Point> path;
+    float final_wight = -200.f; // 越大越好
+    int min_berth_id = 0;
+    bool found_path = false;
+    // 只要能到达任意一个港口就行
+    for (int i = 0; i < BERTH_NUM; i++) {
+      if (berth_is_baned(i)) {
+        continue;
+      }
+
+      Point berth_pos = Point(berths[i].pos.x + 1, berths[i].pos.y + 1);
+      auto cur_path = get_path_from_point_to_berth(i, from, found_path);
+      auto &cur_berth = berths[i];
+      if (found_path) {
+        const int near_goods_num = cur_berth.near_goods_num;
+        const int near_goods_value = cur_berth.near_goods_value;
+        const int near_goods_distance =
+            cur_berth.near_goods_distance * 2 + cur_path.size();
+
+        if (near_goods_value < 4000) {
+          continue;
+        }
+
+        const float money_per_distance =
+            static_cast<float>(near_goods_value) / (near_goods_distance + 1);
+        const float money_per_goods = static_cast<float>(near_goods_value) /
+                                      static_cast<float>(near_goods_num + 1);
+
+        // TODO: 有更好的方法吗? 越大越好
+        float cur_wight = near_goods_value / (near_goods_distance + 1.0);
+
+        if (cur_wight > final_wight) {
+          final_wight = cur_wight;
+          min_berth_id = i;
+          path = cur_path;
+          founded = true;
+        }
+      }
+    }
+    berth_id = min_berth_id;
+
+    log_info("will go to "
+             "berth[%d],near_goods_num:%d,near_goods_value:%d,near_goods_"
+             "distance:%d",
+             min_berth_id, berths[min_berth_id].near_goods_num,
+             berths[min_berth_id].near_goods_value,
+             berths[min_berth_id].near_goods_distance);
+
+    return path;
+  }
+
   std::vector<Point> get_near_berth_path_exclude(const Point &from,
                                                  int &berth_id, bool &founded,
                                                  std::vector<int> &visit) {
@@ -401,7 +520,7 @@ public:
       }
 
       Point berth_pos = Point(berths[i].pos.x + 1, berths[i].pos.y + 1);
-      auto cur_path = get_berth_path(i, from, found_path);
+      auto cur_path = get_path_from_point_to_berth(i, from, found_path);
       if (found_path) {
         if (cur_path.size() < min_dis) {
           min_dis = cur_path.size();
@@ -627,7 +746,7 @@ public:
       // (117,3) to (107,122)
       Point cur = Point(107, 122);
       bool founded = false;
-      auto path = get_berth_path(i, cur, founded);
+      auto path = get_path_from_point_to_berth(i, cur, founded);
       if (founded) {
         log_info("berth[%d] (%d,%d)path size:%d", i, berths[i].pos.x + 1,
                  berths[i].pos.y + 1, path.size());

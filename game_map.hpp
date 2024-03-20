@@ -78,7 +78,7 @@ public:
   }
   bool is_space(Point &pos) { return !is_barrier(pos); }
 
-  std::vector<Point> neighbors(const Point &pos) {
+  std::vector<Point> neighbors(const Point &pos, bool rand = true) {
     std::vector<Point> result;
     constexpr int dx[4] = {1, -1, 0, 0};
     constexpr int dy[4] = {0, 0, 1, -1};
@@ -89,10 +89,11 @@ public:
         result.push_back(Point(nx, ny));
       }
     }
-
-    // 随机打乱
-    std::random_device rd;
-    std::shuffle(result.begin(), result.end(), rd);
+    if (rand) {
+      // 随机打乱
+      std::random_device rd;
+      std::shuffle(result.begin(), result.end(), rd);
+    }
 
     return result;
   }

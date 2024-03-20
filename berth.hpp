@@ -16,6 +16,7 @@ struct Berth {
   float avg_berth_loading_speed = 0; // 平均港口装货速度
 
   // 一些信息, 港口周围货物的信息，机器人会优先去货物多的港口
+  bool is_baned = false;
   int near_goods_num = 0;
   int near_goods_value = 0;
   int near_goods_distance = 0;
@@ -58,7 +59,8 @@ struct Berth {
     float trans_w =
         avg_berth_transport_time / (float)transport_time; // 越大越好
     float load_w = (float)loading_speed / avg_berth_loading_speed; // 越大越好
-    return trans_w * load_w;
+    
+    return avg_berth_transport_time;
   }
 
   int goods_num() { return goods_list.size(); }

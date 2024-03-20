@@ -4,6 +4,7 @@
 
 #include "log.h"
 #include "point.hpp"
+#include <array>
 #include <random>
 #include <vector>
 class GameMap {
@@ -18,6 +19,36 @@ private:
   enum PosType { SPACE = 0, OCEAN = 1, ROBOT = 2, BARRIER = 3, BERTH = 4 };
 
 public:
+  std::array<Point, 10> robots_first_pos; // 机器人初始位置
+
+  Point find_random_barrier() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 199);
+    Point pos;
+    do {
+      pos.x = dis(gen);
+      pos.y = dis(gen);
+    } while (map[pos.x][pos.y] != '#');
+    return pos;
+  }
+
+  void init_robot_pos() {
+    int cnt = 0;
+    for (int i = 0; i < 200; i++) {
+      for (int j = 0; j < 200; j++) {
+        if (map[i][j] == 'A') {
+          robots_first_pos[cnt++] = Point(i, j);
+        }
+      }
+    }
+
+    for (int i = 0; i < 10; i++) {
+      log_raw("robot %d pos:(%d,%d)\n", i, robots_first_pos[i].x,
+              robots_first_pos[i].y);
+    }
+  }
+
   PosType get_pos_type(const Point &pos) {
     if (is_valid_pos(pos)) {
       switch (map[pos.x][pos.y]) {

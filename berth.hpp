@@ -81,8 +81,8 @@ struct Berth {
   }
 
   bool in_berth_search_area(const Point &p) {
-    const auto &left_top = Point{pos.x - 2, pos.y - 2};
-    const auto right_bottom = Point{pos.x + 5, pos.y + 5};
+    const auto &left_top = Point{pos.x, pos.y};
+    const auto right_bottom = Point{pos.x + 3, pos.y + 3};
 
     bool x_in = p.x >= left_top.x && p.x <= right_bottom.x;
     bool y_in = p.y >= left_top.y && p.y <= right_bottom.y;

@@ -4,9 +4,9 @@ JUGDE_PROG = $(SDK_PATH)/PreliminaryJudge
 MAP_PATH = ./maps
 REPLAYER_PROG = $(SDK_PATH)/replayer/CodeCraft_2024_Replay.x86_64
 
+# 87911441231234 有一个港口距离特别短
 
-
-RAND_SEED = 87911441231234
+RAND_SEED = 8791144129
 MAP_SEL := map312.txt
 TARGET = $(PWD)/build/main
 # 获取时间戳

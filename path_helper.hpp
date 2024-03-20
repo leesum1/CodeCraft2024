@@ -1,12 +1,13 @@
 
 #include "log.h"
 #include "point.hpp"
+#include <algorithm>
 #include <functional>
 #include <queue>
 #include <unordered_map>
 #include <vector>
 
-class BFS {
+class PATHHelper {
 
 public:
   static std::unordered_map<Point, PointCost>
@@ -116,6 +117,17 @@ public:
     return come_from;
   }
 
+  /**
+   * @brief 一个用于 bfs 路径搜索的通用模板
+   *
+   * @param start 搜索的起始点
+   * @param goal  搜索的目标
+   * @param is_barrier
+   * @param neighbors 返回一个点的邻居节点
+   * @param max_level 搜索的最大深度
+   * @return std::unordered_map<Point, PointCost>
+   * come_form,可以找到一个点的父节点和到达该点的代价
+   */
   static std::unordered_map<Point, PointCost>
   bfs_search(const Point &start, std::function<bool(Point)> goal,
              std::function<bool(Point)> is_barrier,
@@ -152,6 +164,15 @@ public:
 
     return come_from;
   }
+  /**
+   * @brief 从 come_from 中回溯得到 start 到 goal 的路径
+   *
+   * @param start
+   * @param goal
+   * @param come_from 使用任何一种搜索算法得到的 come_from
+   * @param founded 是否找到路径
+   * @return std::vector<Point> 使用 vector 存储的路径
+   */
   static std::vector<Point>
   get_path(const Point &start, const Point &goal,
            const std::unordered_map<Point, PointCost> &come_from,
@@ -174,6 +195,46 @@ public:
       }
       cur = come_from.at(cur).pos;
     }
+    return path;
+  }
+
+  /**
+   * @brief 从 come_from 中回溯得到 goal 到 start 的路径(start 到 goal
+   * 的路径的逆序)
+   *
+   * @param start
+   * @param goal
+   * @param come_from 使用任何一种搜索算法得到的 come_from
+   * @param founded 是否找到路径
+   * @return std::vector<Point> 使用 vector 存储的路径
+   */
+  static std::vector<Point>
+  get_path_reverse(const Point &start, const Point &goal,
+                   const std::unordered_map<Point, PointCost> &come_from,
+                   bool &founded) {
+    std::vector<Point> path;
+    founded = true;
+
+    if (start == goal) {
+      log_info("start == goal, no need to move");
+      founded = false;
+      return path;
+    }
+
+    path = get_path(start, goal, come_from, founded);
+
+    if (founded) {
+      if (path.front() != goal) {
+        log_fatal("path.front() != goal, path.front():(%d,%d), goal:(%d,%d)",
+                  path.front().x, path.front().y, goal.x, goal.y);
+      }
+    }
+
+    // 逆序需要的特殊处理
+    path.emplace_back(start);
+    std::reverse(path.begin(), path.end());
+    path.pop_back();
+
     return path;
   }
 };

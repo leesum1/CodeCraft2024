@@ -5,7 +5,6 @@
 #include "point.hpp"
 #include <algorithm>
 #include <list>
-#include <regex>
 #include <utility>
 struct Berth {
   Point pos;
@@ -18,6 +17,7 @@ struct Berth {
 
   // 一些信息, 港口周围货物的信息，机器人会优先去货物多的港口
   bool is_baned = false;
+  bool tmp_baned = false;
   int near_goods_num = 0;
   int near_goods_value = 0;
   int near_goods_distance = 0;

@@ -10,19 +10,20 @@ int main() {
   log_init("log.txt", 6);
 #endif
 
-  static int goods_count = 0;
+  auto m = new Manager();
 
   try {
 
-    auto m = Manager();
-    m.init_game();
+    m->init_game();
     // m.io_layer.test_berths_come_from();
-    m.test_berths1();
+    m->test_berths1();
 
   } catch (const std::exception &e) {
 
     log_fatal("exception:%s", e.what());
   }
+
+  delete m;
 
   return 0;
 }

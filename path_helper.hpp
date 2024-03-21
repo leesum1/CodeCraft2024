@@ -26,10 +26,14 @@ public:
     visited[start.x][start.y] = true;
     Point goal_point;
 
+    if (goal(start)) {
+      founded = false;
+      return std::vector<Point>();
+    }
+
     int search_level = 0;
     while (!q.empty() && search_level < max_level) {
       int cur_level_size = q.size();
-      // log_debug("cur_level_size:%d", cur_level_size);
       for (int i = 0; i < cur_level_size; i++) {
         Point cur = q.front();
         if (goal(cur)) {
@@ -79,7 +83,7 @@ public:
 
     auto come_from = bfs_search(
         start, [&Goal](Point p) { return p == Goal; }, is_barrier, neighbors,
-        40);
+        30);
     bool founded = false;
     auto path = get_path(start, Goal, come_from, founded);
 
@@ -114,7 +118,7 @@ public:
       }
 
       for (int i = 0; i < path.size(); i++) {
-        cur_path.push_back(path.at(i));
+        cur_path.emplace_back(path.at(i));
       }
       success = true;
     }

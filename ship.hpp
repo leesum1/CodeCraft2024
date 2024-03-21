@@ -10,8 +10,9 @@ public:
   int berth_id;
 
   // 一些状态位置
-  int berth_wait_cycle; // 等待进入泊位的周期数
-  int goods_wait_cycle; // 在泊位等待货物的周期数
+  int berth_wait_cycle;   // 等待进入泊位的周期数
+  int goods_wait_cycle;   // 在泊位等待货物的周期数
+  bool is_last_transport; // 是否是最后一次运输
 
   bool has_change_berth; // 是否已经换泊位,即在泊位中移动
 
@@ -63,5 +64,6 @@ public:
     this->goods_wait_cycle = 0;
     this->inst_remine_cycle = 0;
     this->spend_cycle = 0;
+    this->is_last_transport = false;
   }
 };

@@ -13,6 +13,8 @@ public:
   int berth_wait_cycle;   // 等待进入泊位的周期数
   int goods_wait_cycle;   // 在泊位等待货物的周期数
   bool is_last_transport; // 是否是最后一次运输
+  int last_berth_id = -1; // 上一次泊位id
+  bool is_dead = false;   // 无法再接受指令
 
   bool has_change_berth; // 是否已经换泊位,即在泊位中移动
 
@@ -46,7 +48,7 @@ public:
     log_assert(this->berth_id == -1, "berth_id is not -1, %d", this->berth_id);
 
     log_trace("Ship %d unload, cur_capacity: %d, cur_value: %d", this->id,
-              this->cur_capacity, this->cur_value);
+              this->capacity_percent(), this->cur_value);
     this->cur_capacity = 0;
     this->cur_value = 0;
   }
@@ -65,5 +67,6 @@ public:
     this->inst_remine_cycle = 0;
     this->spend_cycle = 0;
     this->is_last_transport = false;
+    this->is_dead = false;
   }
 };

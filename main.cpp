@@ -16,13 +16,12 @@ int main() {
 
     m->init_game();
     // m.io_layer.test_berths_come_from();
-    m->test_berths1();
+    m->run_game();
 
   } catch (const std::exception &e) {
 
     log_fatal("exception:%s", e.what());
   }
-
   delete m;
 
   return 0;

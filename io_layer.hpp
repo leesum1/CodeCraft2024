@@ -473,6 +473,9 @@ public:
 
     // 只要能到达任意一个港口就行
     for (int i = 0; i < ROBOT_NUM; i++) {
+      if (berth_is_baned(i)) {
+        continue;
+      }
       if (std::any_of(visit.begin(), visit.end(),
                       [i](int v) { return v == i; })) {
         continue;

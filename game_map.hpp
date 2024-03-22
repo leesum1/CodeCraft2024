@@ -83,10 +83,10 @@ public:
     constexpr int dx[4] = {1, -1, 0, 0};
     constexpr int dy[4] = {0, 0, 1, -1};
     for (int i = 0; i < 4; i++) {
-      int nx = pos.x + dx[i];
-      int ny = pos.y + dy[i];
+      const int nx = pos.x + dx[i];
+      const int ny = pos.y + dy[i];
       if (is_valid_pos(pos) && !is_barrier(pos)) {
-        result.push_back(Point(nx, ny));
+        result.emplace_back(nx, ny);
       }
     }
     if (rand) {
@@ -126,6 +126,6 @@ public:
     log_raw("line:%d\n", x);
   }
 
-  explicit GameMap() {}
-  ~GameMap(){};
+  explicit GameMap() = default;
+  ~GameMap()= default;
 };

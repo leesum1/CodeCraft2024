@@ -20,4 +20,10 @@ std::unordered_set<Key> map_to_set(const std::unordered_map<Key, Value> &m) {
   }
   return s;
 }
+
+template <typename T>
+std::unordered_set<T> vector_to_set(const std::vector<T> &v) {
+  std::unordered_set<T> s(v.begin(), v.end());
+  return s;
+}
 } // namespace Tools

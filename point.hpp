@@ -64,6 +64,7 @@ struct PrioItem {
 };
 
 static const Point invalid_point;
+static const Point stop_point(-2, -2);
 
 #define INVALID_POINT invalid_point
 

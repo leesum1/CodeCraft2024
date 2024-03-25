@@ -29,7 +29,8 @@ public:
 
   bool can_accpet_inst() { return this->inst_remine_cycle <= 0; }
   void new_inst(int inst_cycle) {
-    log_assert(this->inst_remine_cycle == 0, "inst_remine_cycle is not 0");
+    log_assert(this->inst_remine_cycle == 0, "inst_remine_cycle is not 0 ,%d",
+               this->inst_remine_cycle);
     log_assert(inst_cycle > 0, "inst_cycle is not positive");
 
     this->inst_remine_cycle = inst_cycle;

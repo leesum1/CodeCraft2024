@@ -296,4 +296,37 @@ public:
 
     return path;
   }
+
+  static void add_backtrace_path(const Point &cur_pos,
+                                 std::vector<Point> &orig_path,
+                                 const std::vector<Point> &backtrace_path) {
+
+    log_assert(backtrace_path.back() != cur_pos,
+               "backtrace_path.front() == cur_pos");
+    log_assert(orig_path.back() != cur_pos, "orig_path.back() == cur_pos");
+
+    orig_path.emplace_back(cur_pos);
+
+    // 1. 插入从目标点回到当前位置的路径
+    for (int i = backtrace_path.size() - 1; i >= 0; i--) {
+      if (backtrace_path.at(i) == backtrace_path.front()) {
+        continue;
+      }
+      orig_path.emplace_back(backtrace_path.at(i));
+    }
+
+    // const int stop_count = std::rand() % (backtrace_path.size());
+
+    // for (int i = 0; i < stop_count; i++) {
+    //   orig_path.emplace_back(stop_point);
+    // }
+
+    // 2. 插入去往目标的路径
+    for (const auto &go_pos : backtrace_path) {
+      // if (go_pos == backtrace_path.front()) {
+      //   continue;
+      // }
+      orig_path.emplace_back(go_pos);
+    }
+  }
 };

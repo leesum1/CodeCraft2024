@@ -7,6 +7,7 @@
 #include "tools.hpp"
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cmath>
 #include <cstdlib>
 #include <random>
@@ -14,6 +15,8 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+const int max_robots_num_in_berth = 3;
 
 class Manager {
 
@@ -23,6 +26,8 @@ public:
   std::array<std::vector<Point>, ROBOT_NUM> robots_path_list;
   std::array<Point, ROBOT_NUM> robots_cur_pos_list;
   std::array<Point, ROBOT_NUM> robots_next_pos_list;
+  std::array<Point, ROBOT_NUM> robots_next_pos_list_copy;
+  std::vector<int> robots_need_move_but_not_move;
   // std::array<int, ROBOT_NUM> berths_id_list;
   std::array<bool, ROBOT_NUM> robots_get_action{};
   std::array<bool, ROBOT_NUM> robots_pull_action{};
@@ -30,6 +35,7 @@ public:
   std::array<bool, ROBOT_NUM> robots_has_goods{};
   std::array<bool, ROBOT_NUM> robots_is_dead{};
   std::array<bool, ROBOT_NUM> robots_first_get_goods{};
+  std::array<bool, 10> robots_has_pass_collision{};
   std::array<int, ROBOT_NUM> robots_idle_cycle{};
   std::array<bool, 10> berths_visit{};
   std::vector<int> cycle1_berths_visit;
@@ -39,6 +45,123 @@ public:
   Manager() = default;
   ~Manager() = default;
   void init_game() { io_layer.init(); }
+
+  auto get_is_barrier_lambda_v3(const int robot_id) {
+    auto is_barrier = [&](const Point &p) {
+      bool is_barrier1 = io_layer.game_map.is_barrier(p);
+      //
+      bool is_barrier2 = false;
+
+      // 与其他机器人的当前位置碰撞
+      for (int i = 0; i < ROBOT_NUM; i++) {
+        if (i == robot_id) {
+          continue;
+        }
+        if (p == robots_cur_pos_list[i]) {
+          is_barrier2 = true;
+          break;
+        }
+      }
+
+      bool is_barrier3 = false;
+      // is_barrier3 =
+      //     low_prio_next_pos_collision_with_others_next_pos(robot_id, p);
+
+      // // 与优先级高的机器人的下一个位置碰撞
+      for (int i = 0; i < ROBOT_NUM; i++) {
+        if (i == robot_id) {
+          continue;
+        }
+        if (p == robots_next_pos_list[i]) {
+          is_barrier3 = true;
+          break;
+        }
+      }
+      return is_barrier1 || is_barrier2 || is_barrier3;
+    };
+    return is_barrier;
+  }
+
+  auto get_is_barrier_lambda_v2(const int robot_id) {
+    auto is_barrier = [&](const Point &p) {
+      bool is_barrier1 = io_layer.game_map.is_barrier(p);
+      //
+      bool is_barrier2 = false;
+
+      // 与其他机器人的当前位置碰撞
+      for (int i = 0; i < ROBOT_NUM; i++) {
+        if (i == robot_id) {
+          continue;
+        }
+        if (p == robots_cur_pos_list[i]) {
+          is_barrier2 = true;
+          break;
+        }
+      }
+
+      bool is_barrier3 = false;
+      // is_barrier3 =
+      //     low_prio_next_pos_collision_with_others_next_pos(robot_id, p);
+
+      // // 与优先级高的机器人的下一个位置碰撞
+      for (int i = 0; i < ROBOT_NUM; i++) {
+        if (i == robot_id) {
+          continue;
+        }
+        if (robots_has_pass_collision[i] == false) {
+          continue;
+        }
+        if (p == robots_next_pos_list[i]) {
+          is_barrier3 = true;
+          break;
+        }
+      }
+      return is_barrier1 || is_barrier2 || is_barrier3;
+    };
+    return is_barrier;
+  }
+
+  auto get_is_barrier_lambda_v1(const int robot_id) {
+    auto is_barrier = [&](const Point &p) {
+      bool is_barrier1 = io_layer.game_map.is_barrier(p);
+      //
+      bool is_barrier2 = false;
+
+      is_barrier2 =
+          low_prio_next_pos_collision_with_others_cur_pos(robot_id, p);
+
+      // // 与其他机器人的当前位置碰撞
+      // for (int i = 0; i < ROBOT_NUM; i++) {
+      //   if (i == robot_id) {
+      //     continue;
+      //   }
+      //   if (p == robots_cur_pos_list[i]) {
+      //     is_barrier2 = true;
+      //     break;
+      //   }
+      // }
+
+      bool is_barrier3 = false;
+      is_barrier3 =
+          low_prio_next_pos_collision_with_others_next_pos(robot_id, p);
+
+      // // 与优先级高的机器人的下一个位置碰撞
+      // for (int i = 0; i < ROBOT_NUM; i++) {
+      //   if (i == robot_id) {
+      //     continue;
+      //   }
+      //   if (robots_has_pass_collision[i] == false) {
+      //     continue;
+      //   }
+      //   if (p == robots_next_pos_list[i]) {
+      //     is_barrier3 = true;
+      //     break;
+      //   }
+      // }
+      return is_barrier1 || is_barrier2 || is_barrier3;
+    };
+    return is_barrier;
+  }
 
   // ---------------------------------------
   // 障碍物检测
@@ -69,13 +192,13 @@ public:
   // 碰撞检测(采用剪切法)
   void check_collision(int robot_id) {
 
-    Point robot_next_pos = robots_next_pos_list[robot_id];
-    Point robot_cur_pos = robots_cur_pos_list[robot_id];
+    const Point robot_next_pos = robots_next_pos_list[robot_id];
+    const Point robot_cur_pos = robots_cur_pos_list[robot_id];
     log_trace("robot[%d] check_collision start", robot_id);
     log_trace("robot[%d] robot_cur_pos(%d,%d) robot_next_pos(%d,%d)", robot_id,
               P_ARG(robot_cur_pos), P_ARG(robot_next_pos));
 
-    if (robot_next_pos == Point()) {
+    if (robot_next_pos == invalid_point || robot_next_pos == stop_point) {
       // 不动就不需要检测
       log_trace("robot[%d] robot_next_pos is null, no need check_collision",
                 robot_id);
@@ -106,31 +229,92 @@ public:
 
         // 更新下一步位置
         robots_next_pos_list.at(robot_id) = robots_path_list[robot_id].back();
+        return;
       } else {
         // 能不能再利用 BFS 的结果，找到一个路径，需要一个终点
         // 需要另外的策略
         // 1. 找不到路就停止 (在狭窄的地方会死锁)
         // 2. 随便找块空地
 
-        // auto max_point =
-        //     std::max_element(come_from_t.begin(), come_from_t.end(),
-        //                      [&](const auto &p1, const auto &p2) {
-        //                        return p1.second.cost < p2.second.cost;
-        //                      });
+        // 获取与当前机器人碰撞机器人的路径
+        const auto &collison_path_set =
+            Tools::vector_to_set(robots_path_list[i]);
+        const auto colilison_pos = robots_cur_pos_list[i];
+        const auto colilison_next_pos = robots_next_pos_list[i];
 
-        std::vector<Point> come_from_values;
-
+        Point bt_point = invalid_point;
+        bool bt_point_founded = false;
+        int bt_cost = 10000;
+        // 找到一个没有在碰撞机器人路径的空地
+        const int r_size = 1 + std::rand() % 4;
         for (const auto &pair : come_from_t) {
-          come_from_values.push_back(pair.first);
+          if (collison_path_set.find(pair.first) == collison_path_set.end()) {
+            if (pair.first.x == colilison_pos.x ||
+                pair.first.y == colilison_pos.y) {
+              continue;
+            }
+            if (pair.first.x == colilison_next_pos.x ||
+                pair.first.y == colilison_next_pos.y) {
+              continue;
+            }
+
+            if (pair.second.cost < bt_cost && (pair.second.cost > r_size)) {
+              bt_cost = pair.second.cost;
+              bt_point = pair.first;
+              bt_point_founded = true;
+            }
+          }
         }
 
-        std::random_device rd;
-        std::shuffle(come_from_values.begin(), come_from_values.end(), rd);
+        if (bt_point_founded) {
 
-        auto random_point = come_from_values.back();
+          // if (robot_id < i) {
+          //   log_info("robot[%d] stop move wait path", robot_id);
+          //   // for (int i = 0; i < 5; i++) {
+          //   //   robots_path_list[robot_id].push_back(stop_point);
+          //   // }
+          //   robots_next_pos_list.at(robot_id) = invalid_point;
+          //   return;
+          // }
+          if (bt_point == robot_cur_pos) {
+            log_info("robot[%d] bt_point == robot_cur_pos not move", robot_id);
+            // for (int i = 0; i < 5; i++) {
+            //   robots_path_list[robot_id].push_back(stop_point);
+            // }
+            robots_next_pos_list.at(robot_id) = invalid_point;
+            return;
+          }
+
+          log_trace("robot[%d] find random space(%d,%d)", robot_id,
+                    P_ARG(bt_point));
+          bool bt_success;
+          const auto bt_path = PATHHelper::get_path(robot_cur_pos, bt_point,
+                                                    come_from_t, bt_success);
+          log_assert(bt_success, "error, bt_success is false");
+
+          PATHHelper::add_backtrace_path(robot_cur_pos,
+                                         robots_path_list[robot_id], bt_path);
+
+          // 更新下一步位置
+          robots_next_pos_list.at(robot_id) = robots_path_list[robot_id].back();
+          // log_info("robot[%d],add bt path size:%d",robot_id, bt_path.size());
+          // for (const auto &p : robots_path_list[robot_id]) {
+          //   log_info("robot[%d] bt_path (%d,%d)", robot_id, P_ARG(p));
+          // }
+          // assert(0);
+          return;
+        }
+
+        const auto max_point =
+            std::max_element(come_from_t.begin(), come_from_t.end(),
+                             [&](const auto &p1, const auto &p2) {
+                               return p1.second.cost < p2.second.cost;
+                             });
+
+        const auto &random_point = max_point->first;
 
         bool success2 = false;
-        std::vector<Point> path_last = PATHHelper::get_path(
+        const std::vector<Point> path_last = PATHHelper::get_path(
             robot_cur_pos, random_point, come_from_t, success2);
 
         if (path_last.empty()) {
@@ -138,6 +322,7 @@ public:
           // 再次寻小路去周围的空地?)
           log_info("robot[%d] new path not found, stop move", robot_id);
           robots_next_pos_list.at(robot_id) = Point();
+          return;
         } else {
 
           // 最对去 path_last 的五个点
@@ -168,22 +353,377 @@ public:
 
             robots_target_goods_list[robot_id] = invalid_goods;
           }
+          return;
         }
       }
     }
     log_debug("robot[%d] check_collision end", robot_id);
-  };
+  }
+  // 当前机器人为高优先级
+  int high_prio_next_pos_collision_with_others_cur_pos(const int robot_id) {
+    const Point &robot_next_pos = robots_next_pos_list[robot_id];
+    if (robot_next_pos == invalid_point) {
+      return -1;
+    }
+    if (robot_next_pos == stop_point) {
+      return -1;
+    }
+    for (int i = 0; i < ROBOT_NUM; i++) {
+      if (i == robot_id) {
+        // 不需要与自己检查
+        continue;
+      }
 
-  void err_debug(int robot_id){
-      // if (!io_layer.is_valid_move(robots_cur_pos_list[robot_id],
-      //                             robots_next_pos_list[robot_id])) {
-      //   log_trace("robot[%d] invalid move, path size", robot_id);
+      if (robots_has_pass_collision[i]) {
+        // 只和没有通过碰撞检测的机器人检测
+        continue;
+      }
 
-      //   for (auto pos : robots_path_list[robot_id]) {
-      //     log_trace("robot[%d] path (%d,%d)", robot_id, pos.x, pos.y);
-      //   }
-      // }
-  };
+      if (robot_next_pos == robots_cur_pos_list[i]) {
+        return i;
+      }
+    }
+
+    return -1;
+  }
+
+  // 当前机器人为高优先级
+  int high_prio_next_pos_collision_with_others_cur_pos_step2(
+      const int robot_id) {
+    const Point &robot_next_pos = robots_next_pos_list_copy[robot_id];
+    if (robot_next_pos == invalid_point) {
+      return -1;
+    }
+    if (robot_next_pos == stop_point) {
+      return -1;
+    }
+    for (int i = 0; i < ROBOT_NUM; i++) {
+      if (i == robot_id) {
+        // 不需要与自己检查
+        continue;
+      }
+
+      if (robot_next_pos == robots_cur_pos_list[i]) {
+        return i;
+      }
+    }
+
+    return -1;
+  }
+
+  // 当前机器人为高优先级
+  bool high_prio_next_pos_collision_with_others_next_pos(const int robot_id) {
+    const Point &robot_next_pos = robots_next_pos_list[robot_id];
+
+    if (robot_next_pos == invalid_point) {
+      return false;
+    }
+    if (robot_next_pos == stop_point) {
+      return false;
+    }
+
+    for (int i = 0; i < ROBOT_NUM; i++) {
+      if (i == robot_id) {
+        // 不需要与自己检查
+        continue;
+      }
+
+      if (robots_has_pass_collision[i]) {
+        // 只和没有通过碰撞检测的机器人检测
+        continue;
+      }
+
+      if (robot_next_pos == robots_next_pos_list[i]) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+  // 当前机器人为低优先级
+  int low_prio_next_pos_collision_with_others_cur_pos(const int robot_id) {
+    const Point &robot_next_pos = robots_next_pos_list[robot_id];
+
+    if (robot_next_pos == invalid_point) {
+      return -1;
+    }
+    if (robot_next_pos == stop_point) {
+      return -1;
+    }
+
+    for (int i = 0; i < ROBOT_NUM; i++) {
+      if (i == robot_id) {
+        // 不需要与自己检查
+        continue;
+      }
+
+      if (!robots_has_pass_collision[i]) {
+        // 只和通过碰撞检测的机器人检测
+        continue;
+      }
+
+      if (robot_next_pos == robots_cur_pos_list[i]) {
+        return i;
+      }
+    }
+
+    return -1;
+  }
+
+  // 当前机器人为低优先级
+  bool low_prio_next_pos_collision_with_others_cur_pos(const int robot_id,
+                                                       const Point &p) {
+
+    if (p == invalid_point) {
+      return false;
+    }
+    if (p == stop_point) {
+      return false;
+    }
+
+    for (int i = 0; i < ROBOT_NUM; i++) {
+      if (robot_id == i) {
+        continue;
+      }
+
+      if (!robots_has_pass_collision[i]) {
+        // 只和通过碰撞检测的机器人检测
+        continue;
+      }
+
+      if (p == robots_cur_pos_list[i]) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+  // 当前机器人为低优先级
+  bool low_prio_next_pos_collision_with_others_next_pos(const int robot_id,
+                                                        const Point &p) {
+
+    if (p == invalid_point) {
+      return false;
+    }
+    if (p == stop_point) {
+      return false;
+    }
+
+    for (int i = 0; i < ROBOT_NUM; i++) {
+      if (robot_id == i) {
+        continue;
+      }
+
+      if (!robots_has_pass_collision[i]) {
+        // 只和通过碰撞检测的机器人检测
+        continue;
+      }
+
+      if (p == robots_next_pos_list[i]) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // 当前机器人为低优先级
+  bool low_prio_next_pos_collision_with_others_next_pos(const int robot_id) {
+    const Point &robot_next_pos = robots_next_pos_list[robot_id];
+
+    if (robot_next_pos == invalid_point) {
+      return false;
+    }
+    if (robot_next_pos == stop_point) {
+      return false;
+    }
+
+    for (int i = 0; i < ROBOT_NUM; i++) {
+      if (i == robot_id) {
+        // 不需要与自己检查
+        continue;
+      }
+
+      if (!robots_has_pass_collision[i]) {
+        // 只和通过碰撞检测的机器人检测
+        continue;
+      }
+
+      if (robot_next_pos == robots_next_pos_list[i]) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // 碰撞检测(采用剪切法)
+  void check_collision_v1(int robot_id) {
+    robots_has_pass_collision[robot_id] = true;
+
+    const Point robot_next_pos = robots_next_pos_list[robot_id];
+    const Point robot_cur_pos = robots_cur_pos_list[robot_id];
+    log_trace("robot[%d] check_collision start  robot_cur_pos(%d,%d) "
+              "robot_next_pos(%d,%d)",
+              robot_id, P_ARG(robot_cur_pos), P_ARG(robot_next_pos));
+
+    if (robot_next_pos == invalid_point || robot_next_pos == stop_point) {
+      // 不动就不需要检测
+      log_trace("robot[%d] robot_next_pos is null, no need check_collision",
+                robot_id);
+      return;
+    }
+
+    int other_high_collision_robot_id =
+        low_prio_next_pos_collision_with_others_cur_pos(robot_id);
+    if (other_high_collision_robot_id != -1) {
+      // 1. 下一次移动的位置与优先级高的机器人的当前位置冲突:
+      // 选择一个方向移走(为优先级高的开路)
+
+      log_debug("robot[%d] low_prio_next_pos_collision_with_others_cur_pos",
+                robot_id);
+
+      bool cut_success = false;
+      auto come_from_t = PATHHelper::cut_path(
+          robot_cur_pos, get_is_barrier_lambda_v1(robot_id),
+          get_find_neighbor_lambda(), robots_path_list[robot_id], 20,
+          cut_success);
+      if (cut_success) {
+        robots_next_pos_list.at(robot_id) = robots_path_list[robot_id].back();
+      } else {
+
+        Point select_space = invalid_point;
+        int select_cost = 10000;
+        auto is_barrier = get_is_barrier_lambda_v1(robot_id);
+        const auto other_cur_pos =
+            robots_cur_pos_list[other_high_collision_robot_id];
+        for (const auto &p : come_from_t) {
+          if (!is_barrier(p.first)) {
+            if (p.first.x == other_cur_pos.x || p.first.y == other_cur_pos.y) {
+              continue;
+            }
+            if (p.second.cost < select_cost) {
+              select_space = p.first;
+              select_cost = p.second.cost;
+            }
+          }
+        }
+        if (select_space == invalid_point) {
+          // 没有空地可以走了, 高优先级需要让路, 需要设置一个标识位
+          robots_next_pos_list[robot_id] = invalid_point;
+          robots_need_move_but_not_move.push_back(
+              other_high_collision_robot_id);
+          log_debug("cur_robot[%d] no space move,other robot[%d] need move ",
+                    robot_id, other_high_collision_robot_id);
+        } else {
+          bool bt_success;
+
+          const auto bt_path = PATHHelper::get_path(robot_cur_pos, select_space,
+                                                    come_from_t, bt_success);
+          log_assert(bt_success, "error, bt_success is false");
+
+          PATHHelper::add_backtrace_path(robot_cur_pos,
+                                         robots_path_list[robot_id], bt_path);
+          robots_next_pos_list.at(robot_id) = robots_path_list[robot_id].back();
+        }
+      }
+    }
+
+    if (low_prio_next_pos_collision_with_others_next_pos(robot_id)) {
+      log_debug("robot[%d],low_prio_next_pos_collision_with_others_next_pos",
+                robot_id);
+      //   2. 下一次移动的位置与优先级高的机器人的下一次位置冲突: 取消当前移动
+      //   (给优先级高的让路) (是否可以选择一个方向移走?)
+      robots_next_pos_list[robot_id] = invalid_point;
+    }
+
+    if (high_prio_next_pos_collision_with_others_next_pos(robot_id)) {
+      log_debug("robot[%d],high_prio_next_pos_collision_with_others_next_pos",
+                robot_id);
+      // 下一次移动位置与优先级低的下一次移动的位置冲突:继续移动(因为优先级低的会取消本次移动)
+    }
+
+    int other_collision_robot_id =
+        high_prio_next_pos_collision_with_others_cur_pos(robot_id);
+
+    if (other_collision_robot_id != -1) {
+      log_debug("robot[%d],high_prio_next_pos_collision_with_other[%d]_cur_pos",
+                robot_id, other_collision_robot_id);
+
+      // 下一次移动位置与优先级低的机器人当前位置冲突: 停止当前移动,
+      // 原地不动(在下一个周期,其他优先级低的会让出位置)
+
+      robots_next_pos_list[robot_id] = invalid_point;
+    }
+  }
+
+  void check_collison_step2(const int robot_id) {
+
+    const auto robot_cur_pos = robots_cur_pos_list[robot_id];
+    int other_collision_robot_id =
+        high_prio_next_pos_collision_with_others_cur_pos_step2(robot_id);
+
+    if (other_collision_robot_id == -1) {
+      return;
+    }
+
+    // 如果低优先级的机器人不能移动,则高优先级的机器人移动
+    if (std::find(robots_need_move_but_not_move.begin(),
+                  robots_need_move_but_not_move.end(),
+                  robot_id) != robots_need_move_but_not_move.end()) {
+
+      bool cut_success = false;
+      auto come_from_t = PATHHelper::cut_path(
+          robot_cur_pos, get_is_barrier_lambda_v3(robot_id),
+          get_find_neighbor_lambda(), robots_path_list[robot_id], 10,
+          cut_success);
+
+      Point select_space = invalid_point;
+      int select_cost = 10000;
+      auto is_barrier = get_is_barrier_lambda_v3(robot_id);
+      const auto other_cur_pos = robots_cur_pos_list[other_collision_robot_id];
+
+      for (const auto &p : come_from_t) {
+        if (!is_barrier(p.first)) {
+          if (p.first.x == other_cur_pos.x || p.first.y == other_cur_pos.y) {
+            continue;
+          }
+
+          if (p.second.cost < select_cost && p.second.cost > 1) {
+            select_space = p.first;
+            select_cost = p.second.cost;
+          }
+        }
+      }
+      if (select_space == invalid_point) {
+        // 没有空地可以走了
+        robots_next_pos_list[robot_id] = invalid_point;
+        log_debug("robot[%d] check_colliso with [%d]no space to move", robot_id,
+                  other_collision_robot_id);
+      } else {
+        bool bt_success;
+
+        const auto bt_path = PATHHelper::get_path(robot_cur_pos, select_space,
+                                                  come_from_t, bt_success);
+        log_assert(bt_success, "error, bt_success is false");
+
+        PATHHelper::add_backtrace_path(robot_cur_pos,
+                                       robots_path_list[robot_id], bt_path);
+        robots_next_pos_list.at(robot_id) = robots_path_list[robot_id].back();
+      }
+    }
+  }
+
+  // void err_debug(int robot_id){
+  //     // if (!io_layer.is_valid_move(robots_cur_pos_list[robot_id],
+  //     //                             robots_next_pos_list[robot_id])) {
+  //     //   log_trace("robot[%d] invalid move, path size", robot_id);
+
+  //     //   for (auto pos : robots_path_list[robot_id]) {
+  //     //     log_trace("robot[%d] path (%d,%d)", robot_id, pos.x, pos.y);
+  //     //   }
+  //     // }
+  // };
 
   void berth_cycle() {
     for (int i = 0; i < BERTH_NUM; i++) {
@@ -230,9 +770,12 @@ public:
    * @param berth_id
    * @return int
    */
-  int get_berth_robot_num(const int berth_id) {
+  int get_berth_robot_num(const int berth_id, const int robot_id) {
     int num = 0;
     for (int i = 0; i < ROBOT_NUM; i++) {
+      if (robot_id == i) {
+        continue;
+      }
       if (io_layer.robots[i].target_berth_id == berth_id) {
         num++;
       }
@@ -298,8 +841,11 @@ public:
         continue;
       }
       // 货物还剩多久消失
-      const int goods_remin_time =
-          (goods.second.end_cycle - io_layer.cur_cycle);
+      int goods_remin_time = (goods.second.end_cycle - io_layer.cur_cycle);
+
+      if (goods_remin_time < 200) {
+        goods_remin_time = 200;
+      }
 
       // 从货物到港口的最短路径
       const auto to_berth_path_cost =
@@ -324,10 +870,10 @@ public:
       const float to_berth_one =
           to_berth_path_cost.second / static_cast<float>(max_path_size);
       float goods_remin_time_one =
-          4000000.0 / (goods_remin_time * goods_remin_time + 1);
+          4200000.0 / (goods_remin_time * goods_remin_time + 1);
 
-      if (to_goods_path_cost.value() > 85) {
-        goods_remin_time_one = 0;
+      if (to_goods_path_cost.value() > 71) {
+        goods_remin_time_one = goods_remin_time_one / 2;
       }
 
       float cur_weight = to_goods_one + goods_remin_time_one;
@@ -338,6 +884,9 @@ public:
 
       // float cur_weight = 1 / (to_goods_one + 1);
       /** 策略3*/
+
+      //**策略4*/
+      // float cur_weight = 1.0 / (to_goods_path_cost.value());
 
       if (io_layer.final_time) {
         cur_weight =
@@ -442,61 +991,61 @@ public:
       cur_ship.spend_cycle += 500;
     };
 
+    auto from_vp_move_to_berth = [&](const int ship_id) {
+      auto &cur_ship = io_layer.ships[ship_id];
+      if (cur_ship.is_dead) {
+        return;
+      }
+
+      // 1. 开始卸货
+      if (io_layer.cur_cycle != 1) {
+        // 船只的出生点在虚拟点,第一周期不需要卸货
+        io_layer.selled_goods_num += cur_ship.cur_capacity;
+        io_layer.selled_goods_money += cur_ship.cur_value;
+        cur_ship.unload();
+      }
+
+      // 2. 选择一个价值最高的泊位,并且标记为已经占用,并且出发去该泊位
+      int target_berth_id = select_best_berth();
+      const int remine_time = 15000 - (io_layer.cur_cycle);
+
+      if (target_berth_id == -1) {
+        cur_ship.is_dead = true;
+        log_trace("ship[%d] don't have enough time to move to berth[%d], "
+                  "remin_time:%d, transport_cycle:%d",
+                  ship_id, target_berth_id, remine_time);
+        return;
+      }
+
+      const int transport_cycle =
+          io_layer.berths[target_berth_id].transport_time;
+
+      if ((remine_time -
+               (io_layer.minimal_transport_time() * 2 + transport_cycle * 2) <
+           10)) {
+        log_trace("ship[%d] last transport to berth[%d], remin_time:%d, "
+                  "transport_cycle:%d, at least %d cycle to start next ",
+                  ship_id, target_berth_id, remine_time,
+                  io_layer.minimal_transport_time(), transport_cycle);
+        cur_ship.is_last_transport = true;
+      }
+
+      berths_visit[target_berth_id] = true;
+      // 3. 出发去该泊位
+      io_layer.ship(ship_id, target_berth_id);
+      cur_ship.new_inst(transport_cycle);
+      cur_ship.spend_cycle = transport_cycle;
+
+      log_trace(
+          "ship[%d] will go to berth[%d] from virtual point , trans_time ",
+          ship_id, target_berth_id, transport_cycle);
+      return;
+    };
+
     if (cur_ship.status == 0) {
       // 船只移动中
       log_trace("ship[%d] is moving to %d, remine time %d", ship_id,
                 cur_ship.berth_id, cur_ship.inst_remine_cycle);
-
-      if (cur_ship.berth_id == -1 && cur_ship.inst_remine_cycle == 1) {
-        if (cur_ship.is_dead) {
-          return;
-        }
-
-        // 船只已经到达虚拟点
-        // 1. 卸货
-        if (io_layer.cur_cycle != 1) {
-          // 船只的出生点在虚拟点,第一周期不需要卸货
-          io_layer.selled_goods_num += cur_ship.cur_capacity;
-          io_layer.selled_goods_money += cur_ship.cur_value;
-          cur_ship.unload();
-        }
-
-        // 2. 选择一个价值最高的泊位,并且标记为已经占用
-        int target_berth_id = select_best_berth();
-        const int remine_time = 15000 - (io_layer.cur_cycle);
-
-        if (target_berth_id == -1) {
-          cur_ship.is_dead = true;
-          log_trace("ship[%d] don't have enough time to move to berth[%d], "
-                    "remin_time:%d, transport_cycle:%d",
-                    ship_id, target_berth_id, remine_time);
-          return;
-        }
-
-        const int transport_cycle =
-            io_layer.berths[target_berth_id].transport_time;
-
-        if ((remine_time -
-                 (io_layer.minimal_transport_time() * 2 + transport_cycle * 2) <
-             1)) {
-          log_trace("ship[%d] last transport to berth[%d], remin_time:%d, "
-                    "transport_cycle:%d, at least %d cycle to start next ",
-                    ship_id, target_berth_id, remine_time,
-                    io_layer.minimal_transport_time(), transport_cycle);
-          cur_ship.is_last_transport = true;
-        }
-
-        berths_visit[target_berth_id] = true;
-        // 3. 出发去该泊位
-        io_layer.ship(ship_id, target_berth_id);
-        cur_ship.new_inst(transport_cycle);
-        cur_ship.spend_cycle = transport_cycle;
-
-        log_trace(
-            "ship[%d] will go to berth[%d] from virtual point , trans_time ",
-            ship_id, target_berth_id, transport_cycle);
-        return;
-      }
 
       cur_ship.inst_remine_cycle--;
       return;
@@ -520,53 +1069,9 @@ public:
     cur_ship.inst_remine_cycle = 0;
 
     if (cur_ship.berth_id == -1) {
-      if (cur_ship.is_dead) {
-        return;
-      }
 
-      // 船只已经到达虚拟点
-      // 1. 卸货
-      if (io_layer.cur_cycle != 1) {
-        // 船只的出生点在虚拟点,第一周期不需要卸货
-        io_layer.selled_goods_num += cur_ship.cur_capacity;
-        io_layer.selled_goods_money += cur_ship.cur_value;
-        cur_ship.unload();
-      }
+      from_vp_move_to_berth(ship_id);
 
-      // 2. 选择一个价值最高的泊位,并且标记为已经占用
-      int target_berth_id = select_best_berth();
-      const int remine_time = 15000 - (io_layer.cur_cycle);
-
-      if (target_berth_id == -1) {
-        cur_ship.is_dead = true;
-        log_trace("ship[%d] don't have enough time to move to berth[%d], "
-                  "remin_time:%d, transport_cycle:%d",
-                  ship_id, target_berth_id, remine_time);
-        return;
-      }
-
-      const int transport_cycle =
-          io_layer.berths[target_berth_id].transport_time;
-
-      if ((remine_time -
-               (io_layer.minimal_transport_time() * 2 + transport_cycle * 2) <
-           1)) {
-        log_trace("ship[%d] last transport to berth[%d], remin_time:%d, "
-                  "transport_cycle:%d, at least %d cycle to start next ",
-                  ship_id, target_berth_id, remine_time,
-                  io_layer.minimal_transport_time(), transport_cycle);
-        cur_ship.is_last_transport = true;
-      }
-
-      berths_visit[target_berth_id] = true;
-      // 3. 出发去该泊位
-      io_layer.ship(ship_id, target_berth_id);
-      cur_ship.new_inst(transport_cycle);
-      cur_ship.spend_cycle = transport_cycle;
-
-      log_trace(
-          "ship[%d] will go to berth[%d] from virtual point , trans_time ",
-          ship_id, target_berth_id, transport_cycle);
       return;
     }
 
@@ -618,7 +1123,7 @@ public:
         const int next_transport_time =
             io_layer.berths[new_select_berth_id].transport_time + 500;
         // 3. 如果剩余时间不足以去下一个泊位装货,停留在当前泊位
-        if (remine_time > (next_transport_time + 10)) {
+        if (remine_time > (next_transport_time + 5)) {
           // if (!cur_ship.has_change_berth) {
 
           auto &next_berth = io_layer.berths[new_select_berth_id];
@@ -633,24 +1138,26 @@ public:
               static_cast<float>(next_berth_money + cur_ship.cur_value) /
               (cur_ship.spend_cycle + next_transport_time + 500);
 
-          if (next_berth_weight > cur_berth_weight) {
-            cur_ship.has_change_berth = true;
-            cur_ship.goods_wait_cycle = 0;
-            log_trace("ship[%d] wait too long in berth[%d], go to "
-                      "berth[%d],remin_time:%d, next_transport_time:%d",
-                      ship_id, cur_ship.berth_id, new_select_berth_id,
-                      remine_time, next_transport_time);
+          // if (next_berth_weight > cur_berth_weight ||
+          //     io_layer.cur_cycle > 8000) {
+          cur_ship.has_change_berth = true;
+          cur_ship.goods_wait_cycle = 0;
+          log_trace("ship[%d] wait too long in berth[%d], go to "
+                    "berth[%d],remin_time:%d, next_transport_time:%d",
+                    ship_id, cur_ship.berth_id, new_select_berth_id,
+                    remine_time, next_transport_time);
 
-            move_to_next_berth(new_select_berth_id);
+          move_to_next_berth(new_select_berth_id);
 
-            if (cur_ship.is_last_transport) {
-              log_trace("ship[%d] is last transport, will ban berth[%d]",
-                        ship_id, cur_ship.berth_id);
-              cur_berth.is_baned = true;
-            }
-          } else {
-            go_to_virtual_point();
+          if (cur_ship.is_last_transport) {
+            log_trace("ship[%d] is last transport, will ban berth[%d]", ship_id,
+                      cur_ship.berth_id);
+            cur_berth.is_baned = true;
           }
+          // } else {
+          // go_to_virtual_point();
+          // }
+
         } else {
           if (io_layer.final_time == false) {
             io_layer.final_time = true;
@@ -692,7 +1199,7 @@ public:
                  "invalid goods");
     }
 
-    const bool update_goods_info = io_layer.cur_cycle % 5 == 0;
+    const bool update_goods_info = io_layer.cur_cycle % 10 == 0;
     // const bool update_goods_info = false;
 
     if (update_goods_info) {
@@ -724,7 +1231,7 @@ public:
               continue;
             }
 
-            if (cur_cost.value() <= 70 &&
+            if (cur_cost.value() <= 120 &&
                 it->second.money >= io_layer.total_goods_avg_money()) {
               cur_berth.near_goods_num++;
               cur_berth.near_goods_value += it->second.money;
@@ -737,26 +1244,48 @@ public:
       }
     }
     log_info("map_goods_list size:%d", io_layer.map_goods_list.size());
-    for (int i = 0; i < BERTH_NUM; i++) {
-      io_layer.berths[i].printf_near_goods_info();
 
-      // // 动态禁用港口可能还是副作用
-      // if (update_goods_info) {
-      //   if (io_layer.cur_cycle > 1000) {
-      //     if (io_layer.berths[i].near_goods_num < 6) {
+    // if (update_goods_info) {
 
-      //       if (!io_layer.berths[i].tmp_baned) {
-      //         bool maybe_baned = true;
-      //         io_layer.berths[i].tmp_baned = maybe_baned;
-      //       }
-      //     } else {
-      //       io_layer.berths[i].tmp_baned = false;
-      //     }
-      //   }
-      // }
+    //   std::vector<std::pair<int, int>> berths_sort;
+    //   for (int i = 0; i < BERTH_NUM; i++) {
+    //     berths_sort.emplace_back(i, io_layer.berths[i].goods_num());
+    //   }
+    //   std::sort(berths_sort.begin(), berths_sort.end(),
+    //             [&](const auto &p1, const auto &p2) {
+    //               return p1.second < p2.second;
+    //             });
 
-      log_info("berth[%d] is_baned:%d", i, io_layer.berth_is_baned(i));
-    }
+    //   for (int i = 0; i < 10; i++) {
+    //     io_layer.berths[i].tmp_baned = false;
+    //   }
+
+    //   std::for_each_n(berths_sort.begin(), 2, [&](const auto &p) {
+    //     log_info("berth[%d] goods_num:%d", p.first, p.second);
+    //     io_layer.berths[p.first].tmp_baned = true;
+    //   });
+    // }
+
+    // for (int i = 0; i < BERTH_NUM; i++) {
+    //   io_layer.berths[i].printf_near_goods_info();
+
+    //   // // 动态禁用港口可能还是副作用
+    //   if (update_goods_info) {
+    //     if (io_layer.cur_cycle > 1000) {
+    //       if (io_layer.berths[i].near_goods_num < 6) {
+
+    //         if (!io_layer.berths[i].tmp_baned) {
+    //           bool maybe_baned = true;
+    //           io_layer.berths[i].tmp_baned = maybe_baned;
+    //         }
+    //       } else {
+    //         io_layer.berths[i].tmp_baned = false;
+    //       }
+    //     }
+    //   }
+
+    //   log_info("berth[%d] is_baned:%d", i, io_layer.berth_is_baned(i));
+    // }
   }
 
   void go_near_berth(const int robot_id) {
@@ -777,12 +1306,12 @@ public:
       bool founded = false;
       int berth_id;
 
-      std::vector<int> exclude_berths;
-      for (int i = 0; i < BERTH_NUM; i++) {
-        if (get_berth_robot_num(i) >= 3 && !io_layer.final_time) {
-          exclude_berths.emplace_back(i);
-        }
-      }
+      std::vector<int> exclude_berths{};
+      // for (int i = 0; i < BERTH_NUM; i++) {
+      //   if (get_berth_robot_num(i, robot_id) > 3 && !io_layer.final_time) {
+      //     exclude_berths.emplace_back(i);
+      //   }
+      // }
 
       auto path = io_layer.get_near_berth_path_exclude(robot_pos, berth_id,
                                                        founded, exclude_berths);
@@ -821,11 +1350,12 @@ public:
           robot_pos, cycle1_near_berth_id, cycle1_founded, cycle1_berths_visit);
 
       if (cycle1_founded) {
-        robots_path_list[robot_id] = near_path;
+        robots_path_list[robot_id] = Tools::last_n(near_path, 15);
         robots_next_pos_list[robot_id] = near_path.back();
         io_layer.robots[robot_id].target_berth_id = cycle1_near_berth_id;
         cycle1_berths_visit.emplace_back(cycle1_near_berth_id);
         robots_idle_cycle[robot_id] = near_path.size();
+
       } else {
         // 一定可以找到路径, 如果找不到路径,则机器人被困住了
         log_trace("robot[%d] (%d,%d) not found path to berth, is dead!",
@@ -965,7 +1495,7 @@ public:
 
     auto goods_test_path = PATHHelper::bfs_path_v1(
         cur_robot.pos, goods_goal_func, get_is_barrier_lambda(),
-        get_find_neighbor_lambda(), 25, goods_founded);
+        get_find_neighbor_lambda(), 30, goods_founded);
 
     if (goods_founded) {
       const auto &searched_goods =
@@ -985,12 +1515,12 @@ public:
     bool near_founded = false;
     int near_berth_id;
 
-    std::vector<int> exclude_berths;
-    for (int i = 0; i < BERTH_NUM; i++) {
-      if (get_berth_robot_num(i) >= 3 && !io_layer.final_time) {
-        exclude_berths.emplace_back(i);
-      }
-    }
+    std::vector<int> exclude_berths{};
+    // for (int i = 0; i < BERTH_NUM; i++) {
+    //   if (get_berth_robot_num(i, robot_id) > 1 && !io_layer.final_time) {
+    //     exclude_berths.emplace_back(i);
+    //   }
+    // }
 
     std::vector<Point> near_path = io_layer.get_near_berth_path_exclude(
         robot_pos, near_berth_id, near_founded, exclude_berths);
@@ -1016,10 +1546,7 @@ public:
 
     robots_is_dead.fill(false);
     robots_get_action.fill(false);
-
-    // io_layer.berths[0].is_baned = true;
-    // io_layer.berths[1].is_baned = true;
-    // io_layer.berths[9].is_baned = true;
+    robots_has_pass_collision.fill(false);
 
     for (int zhen = 1; zhen <= 15000; zhen++) {
       io_layer.input_cycle();
@@ -1046,20 +1573,39 @@ public:
       }
 
       robots_first_get_goods.fill(false);
+      robots_has_pass_collision.fill(false);
+      robots_need_move_but_not_move.clear();
 
-      for (int i = 0; i < ROBOT_NUM; i++) {
+      for (int i = 0; i < 10; i++) {
         if (robots_is_dead[i]) {
           continue;
         }
         robots_get_cycle(i);
         find_new_goods(i);
         go_near_berth(i);
-        err_debug(i);
-        check_collision(i);
+      }
+
+      std::copy(robots_next_pos_list.begin(), robots_next_pos_list.end(),
+                robots_next_pos_list_copy.begin());
+
+      for (int i = 0; i < 10; i++) {
+        if (robots_is_dead[i]) {
+          continue;
+        }
+        check_collision_v1(i);
+      }
+
+      for (int i = 0; i < 10; i++) {
+        if (robots_is_dead[i]) {
+          continue;
+        }
+        check_collison_step2(i);
+      }
+
+      for (int i = 0; i < 10; i++) {
         robots_move(i);
         robots_pull_cycle(i);
       }
-
       io_layer.output_cycle();
       log_info("map_goods_list size:%d", io_layer.map_goods_list.size());
       io_layer.print_goods_info();
@@ -1073,8 +1619,11 @@ public:
 
   void robots_move(const int rebot_id) {
     const auto &next_pos = robots_next_pos_list[rebot_id];
-    if (next_pos != invalid_point) {
+    if (next_pos != invalid_point && next_pos != stop_point) {
       io_layer.robot_move(rebot_id, next_pos);
+      robots_path_list[rebot_id].pop_back();
+    }
+    if (next_pos == stop_point) {
       robots_path_list[rebot_id].pop_back();
     }
   }

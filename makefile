@@ -3,12 +3,12 @@ SDK_PATH = /home/leesum/Documents/huawei_soft2024/LinuxReleasev1.2.part1/LinuxRe
 SDK_PATH2 = /home/leesum/Documents/huawei_soft2024/LinuxRelease.part01/LinuxRelease
 SDK_PATH3 = /home/leesum/Documents/huawei_soft2024/LinuxReleasev2.0
 JUGDE_PROG = $(SDK_PATH3)/PreliminaryJudge
-MAP_PATH = ./maps323
+MAP_PATH = ./maps
 REPLAYER_PROG = $(SDK_PATH3)/replayer/CodeCraft_2024_Replay.x86_64
 
 # 87911441231234 有一个港口距离特别短
 
-RAND_SEED = 87991284
+RAND_SEED = 14213
 MAP_SEL := map1.txt
 TARGET = $(PWD)/build/main
 # 获取时间戳

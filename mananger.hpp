@@ -441,14 +441,16 @@ public:
     return false;
   }
   // 当前机器人为低优先级
-  int low_prio_next_pos_collision_with_others_cur_pos(const int robot_id) {
+  std::vector<int>
+  low_prio_next_pos_collision_with_others_cur_pos(const int robot_id) {
     const Point &robot_next_pos = robots_next_pos_list[robot_id];
 
+    std::vector<int> robots_list{};
     if (robot_next_pos == invalid_point) {
-      return -1;
+      return robots_list;
     }
     if (robot_next_pos == stop_point) {
-      return -1;
+      return robots_list;
     }
 
     for (int i = 0; i < ROBOT_NUM; i++) {
@@ -463,11 +465,11 @@ public:
       }
 
       if (robot_next_pos == robots_cur_pos_list[i]) {
-        return i;
+        robots_list.emplace_back(i);
       }
     }
 
-    return -1;
+    return robots_list;
   }
 
   // 当前机器人为低优先级
@@ -528,14 +530,15 @@ public:
   }
 
   // 当前机器人为低优先级
-  bool low_prio_next_pos_collision_with_others_next_pos(const int robot_id) {
+  std::vector<int>
+  low_prio_next_pos_collision_with_others_next_pos(const int robot_id) {
     const Point &robot_next_pos = robots_next_pos_list[robot_id];
-
+    std::vector<int> robots_list{};
     if (robot_next_pos == invalid_point) {
-      return false;
+      return robots_list;
     }
     if (robot_next_pos == stop_point) {
-      return false;
+      return robots_list;
     }
 
     for (int i = 0; i < ROBOT_NUM; i++) {
@@ -550,11 +553,43 @@ public:
       }
 
       if (robot_next_pos == robots_next_pos_list[i]) {
-        return true;
+        robots_list.emplace_back(i);
       }
     }
 
-    return false;
+    return robots_list;
+  }
+
+  // 当前机器人为低优先级
+  std::vector<Point>
+  low_prio_cur_pos_collision_with_others_next_pos(const int robot_id) {
+    const Point &robot_cur_pos = robots_cur_pos_list[robot_id];
+
+    std::vector<Point> next_pos_list{};
+    if (robot_cur_pos == invalid_point) {
+      return next_pos_list;
+    }
+    if (robot_cur_pos == stop_point) {
+      return next_pos_list;
+    }
+
+    for (int i = 0; i < ROBOT_NUM; i++) {
+      if (i == robot_id) {
+        // 不需要与自己检查
+        continue;
+      }
+
+      if (!robots_has_pass_collision[i]) {
+        // 只和通过碰撞检测的机器人检测
+        continue;
+      }
+
+      if (robot_cur_pos == robots_next_pos_list[i]) {
+        next_pos_list.emplace_back(robots_next_pos_list[i]);
+      }
+    }
+
+    return next_pos_list;
   }
 
   // 碰撞检测(采用剪切法)
@@ -574,34 +609,142 @@ public:
       return;
     }
 
-    int other_high_collision_robot_id =
+    auto other_high_collision_robot_id =
         low_prio_next_pos_collision_with_others_cur_pos(robot_id);
-    if (other_high_collision_robot_id != -1) {
+    if (!other_high_collision_robot_id.empty()) {
       // 1. 下一次移动的位置与优先级高的机器人的当前位置冲突:
       // 选择一个方向移走(为优先级高的开路)
 
-      log_debug("robot[%d] low_prio_next_pos_collision_with_others_cur_pos",
-                robot_id);
+      for (const int id_tmp : other_high_collision_robot_id) {
+        log_debug(
+            "robot[%d] low_prio_next_pos_collision_with_others[%d]_cur_pos",
+            robot_id, id_tmp);
+      }
 
       bool cut_success = false;
       auto come_from_t = PATHHelper::cut_path(
           robot_cur_pos, get_is_barrier_lambda_v1(robot_id),
-          get_find_neighbor_lambda(), robots_path_list[robot_id], 20,
+          get_find_neighbor_lambda(), robots_path_list[robot_id], 10,
           cut_success);
       if (cut_success) {
         robots_next_pos_list.at(robot_id) = robots_path_list[robot_id].back();
+        log_debug("robot[%d] cut path success", robot_id);
       } else {
+        const auto others_next_pos =
+            low_prio_cur_pos_collision_with_others_next_pos(robot_id);
+
+        std::vector<Point> other_cur_pos_list(
+            other_high_collision_robot_id.size());
+
+        std::transform(other_high_collision_robot_id.begin(),
+                       other_high_collision_robot_id.end(),
+                       other_cur_pos_list.begin(),
+                       [&](const int id) { return robots_cur_pos_list[id]; });
+
+        const auto flag_tmp =
+            std::any_of(other_high_collision_robot_id.begin(),
+                        other_high_collision_robot_id.end(), [&](const int id) {
+                          return robots_next_pos_list[id] == invalid_point;
+                        });
+
+        if (!others_next_pos.empty() || flag_tmp) {
+          Point select_space = invalid_point;
+          int select_cost = 10000;
+          auto is_barrier = get_is_barrier_lambda_v1(robot_id);
+
+          for (const auto &p : come_from_t) {
+            if (!is_barrier(p.first)) {
+              if (std::any_of(other_cur_pos_list.begin(),
+                              other_cur_pos_list.end(), [&](const Point &pos) {
+                                return Point::at_same_row_or_col(pos, p.first);
+                              })) {
+                continue;
+              }
+
+              if (p.second.cost < select_cost) {
+                select_space = p.first;
+                select_cost = p.second.cost;
+              }
+            }
+          }
+          if (select_space == invalid_point) {
+            // 没有空地可以走了, 高优先级需要让路, 需要设置一个标识位
+            robots_next_pos_list[robot_id] = invalid_point;
+
+            robots_need_move_but_not_move.insert(
+                robots_need_move_but_not_move.end(),
+                other_high_collision_robot_id.begin(),
+                other_high_collision_robot_id.end());
+
+            for (const int id_tmp : other_high_collision_robot_id) {
+              log_debug("robot[%d] no space move,other robot[%d] need move",
+                        robot_id, id_tmp);
+            }
+
+          } else {
+            bool bt_success;
+
+            const auto bt_path = PATHHelper::get_path(
+                robot_cur_pos, select_space, come_from_t, bt_success);
+            log_assert(bt_success, "error, bt_success is false");
+
+            PATHHelper::add_backtrace_path(robot_cur_pos,
+                                           robots_path_list[robot_id], bt_path);
+            robots_next_pos_list.at(robot_id) =
+                robots_path_list[robot_id].back();
+            log_debug("robot[%d] add bt path size:%d", robot_id,
+                      bt_path.size());
+          }
+        } else {
+          robots_next_pos_list[robot_id] = invalid_point;
+          log_debug("robot[%d] no need move", robot_id);
+        }
+      }
+    }
+
+    other_high_collision_robot_id =
+        low_prio_next_pos_collision_with_others_next_pos(robot_id);
+    if (!other_high_collision_robot_id.empty()) {
+      log_debug("robot[%d],low_prio_next_pos_collision_with_others_next_pos",
+                robot_id);
+      //   2. 下一次移动的位置与优先级高的机器人的下一次位置冲突: 取消当前移动
+      //   (给优先级高的让路) (是否可以选择一个方向移走?)
+
+      std::vector<Point> path_copy =
+          std::vector<Point>(robots_path_list[robot_id]);
+
+      bool cut_success = false;
+      auto come_from_t = PATHHelper::cut_path(
+          robot_cur_pos, get_is_barrier_lambda_v1(robot_id),
+          get_find_neighbor_lambda(), path_copy, 10, cut_success);
+      if (cut_success) {
+
+        robots_next_pos_list[robot_id] = invalid_point;
+      } else {
+        const auto others_next_pos =
+            low_prio_cur_pos_collision_with_others_next_pos(robot_id);
+
+        std::vector<Point> other_cur_pos_list(
+            other_high_collision_robot_id.size());
+
+        std::transform(other_high_collision_robot_id.begin(),
+                       other_high_collision_robot_id.end(),
+                       other_cur_pos_list.begin(),
+                       [&](const int id) { return robots_cur_pos_list[id]; });
 
         Point select_space = invalid_point;
         int select_cost = 10000;
         auto is_barrier = get_is_barrier_lambda_v1(robot_id);
-        const auto other_cur_pos =
-            robots_cur_pos_list[other_high_collision_robot_id];
+
         for (const auto &p : come_from_t) {
           if (!is_barrier(p.first)) {
-            if (p.first.x == other_cur_pos.x || p.first.y == other_cur_pos.y) {
+            if (std::any_of(other_cur_pos_list.begin(),
+                            other_cur_pos_list.end(), [&](const Point &pos) {
+                              return Point::at_same_row_or_col(pos, p.first);
+                            })) {
               continue;
             }
+
             if (p.second.cost < select_cost) {
               select_space = p.first;
               select_cost = p.second.cost;
@@ -609,12 +752,13 @@ public:
           }
         }
         if (select_space == invalid_point) {
-          // 没有空地可以走了, 高优先级需要让路, 需要设置一个标识位
           robots_next_pos_list[robot_id] = invalid_point;
-          robots_need_move_but_not_move.push_back(
-              other_high_collision_robot_id);
-          log_debug("cur_robot[%d] no space move,other robot[%d] need move ",
-                    robot_id, other_high_collision_robot_id);
+
+          for (const int id_tmp : other_high_collision_robot_id) {
+            log_debug("robot[%d] no space move,other robot[%d] need move",
+                      robot_id, id_tmp);
+          }
+
         } else {
           bool bt_success;
 
@@ -625,16 +769,9 @@ public:
           PATHHelper::add_backtrace_path(robot_cur_pos,
                                          robots_path_list[robot_id], bt_path);
           robots_next_pos_list.at(robot_id) = robots_path_list[robot_id].back();
+          log_debug("robot[%d] add bt path size:%d", robot_id, bt_path.size());
         }
       }
-    }
-
-    if (low_prio_next_pos_collision_with_others_next_pos(robot_id)) {
-      log_debug("robot[%d],low_prio_next_pos_collision_with_others_next_pos",
-                robot_id);
-      //   2. 下一次移动的位置与优先级高的机器人的下一次位置冲突: 取消当前移动
-      //   (给优先级高的让路) (是否可以选择一个方向移走?)
-      robots_next_pos_list[robot_id] = invalid_point;
     }
 
     if (high_prio_next_pos_collision_with_others_next_pos(robot_id)) {
@@ -1516,11 +1653,11 @@ public:
     int near_berth_id;
 
     std::vector<int> exclude_berths{};
-    // for (int i = 0; i < BERTH_NUM; i++) {
-    //   if (get_berth_robot_num(i, robot_id) > 1 && !io_layer.final_time) {
-    //     exclude_berths.emplace_back(i);
-    //   }
-    // }
+    for (int i = 0; i < BERTH_NUM; i++) {
+      if (get_berth_robot_num(i, robot_id) > 1 && !io_layer.final_time) {
+        exclude_berths.emplace_back(i);
+      }
+    }
 
     std::vector<Point> near_path = io_layer.get_near_berth_path_exclude(
         robot_pos, near_berth_id, near_founded, exclude_berths);

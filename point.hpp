@@ -1,14 +1,39 @@
 
 #pragma once
 
+#include "log.h"
 #include <cstddef>
 #include <functional>
+
+#define P_ARG(p) (p).x, (p).y
 
 struct Point {
   int x;
   int y;
   Point() : x(-1), y(-1) {}
   Point(int x, int y) : x(x), y(y) {}
+
+  static bool at_same_row_or_col(const Point &p1, const Point &p2) {
+    log_assert(!is_same(p1, p2), "is_same");
+    return at_same_row(p1, p2) || at_same_col(p1, p2);
+  }
+
+  static bool at_same_row(const Point &p1, const Point &p2) {
+    log_assert(!is_same(p1, p2), "is_same");
+    return p1.x == p2.x;
+  }
+  static bool at_same_col(const Point &p1, const Point &p2) {
+    log_assert(!is_same(p1, p2), "is_same");
+    return p1.y == p2.y;
+  }
+  static bool is_adjacent(const Point &p1, const Point &p2) {
+    log_assert(!is_same(p1, p2), "is_same");
+    return (at_same_row(p1, p2) && abs(p1.x - p2.x) == 1) ||
+           (at_same_col(p1, p2) && abs(p1.y - p2.y) == 1);
+  }
+  static bool is_same(const Point &p1, const Point &p2) {
+    return p1.x == p2.x && p1.y == p2.y;
+  }
 
   Point &operator=(const Point &other) {
     if (this != &other) {
@@ -67,5 +92,3 @@ static const Point invalid_point;
 static const Point stop_point(-2, -2);
 
 #define INVALID_POINT invalid_point
-
-#define P_ARG(p) (p).x, (p).y

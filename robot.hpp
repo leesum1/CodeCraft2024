@@ -30,7 +30,7 @@ public:
     this->target_berth_id = -1;
   }
 
-  Point get_next_pos(){
+  Point get_next_pos() {
     if (next_pos_final != invalid_point) {
       return next_pos_final;
     }
@@ -49,6 +49,18 @@ public:
 
   bool target_berth_is_valid() {
     return target_berth_id >= 0 && target_berth_id < 10;
+  }
+
+  void book_new_goods(const Goods &goods, const std::vector<Point> &path) {
+    target_goods = goods;
+    target_goods.status = GoodsStatus::Booked;
+    path_list = path;
+    next_pos_before_collision_check = path_list.back();
+  }
+
+  void update_next_pos() {
+    log_assert(!path_list.empty(), "path_list is empty");
+    next_pos_before_collision_check = path_list.back();
   }
 
   ~Robot() {}

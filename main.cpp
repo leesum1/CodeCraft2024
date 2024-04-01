@@ -1,11 +1,12 @@
 #include <algorithm>
 #include <cstdio>
+#include <utility>
 #include <vector>
 
 #include "config.h"
 #include "io_laye_new.hpp"
 #include "log.h"
-#include "mananger.hpp"
+#include "mananger_new.hpp"
 #include "point.hpp"
 
 void backtrace_test() {
@@ -48,6 +49,7 @@ void io_layer_test() {
   io_layer->init();
   for (int cycle = 1; cycle <= 15000; cycle++) {
     io_layer->input_cycle();
+
     io_layer->output_cycle();
   }
 }
@@ -59,14 +61,15 @@ int main() {
 #endif
   // backtrace_test();
 
+  auto m = new ManagerNew();
   try {
-
-    io_layer_test();
-
+    m->init_game();
+    m->run_game();
   } catch (const std::exception &e) {
 
     log_fatal("exception:%s", e.what());
   }
+  delete m;
 
   return 0;
 }

@@ -4,6 +4,8 @@
 #include "log.h"
 #include <cstddef>
 #include <functional>
+#include <string>
+#include <string_view>
 
 #define P_ARG(p) (p).x, (p).y
 
@@ -52,6 +54,48 @@ struct Point {
 
   int manhattan_distance(const Point other) {
     return abs(x - other.x) + abs(y - other.y);
+  }
+};
+
+struct Area {
+  Point left_top;
+  Point right_bottom;
+  Area(Point left_top, Point right_bottom)
+      : left_top(left_top), right_bottom(right_bottom) {}
+  Area() : left_top(Point(-1, -1)), right_bottom(Point(-1, -1)) {}
+
+  std::string to_string() {
+    return std::string("left_top:") + std::to_string(left_top.x) + "," +
+           std::to_string(left_top.y) + " right_bottom:" +
+           std::to_string(right_bottom.x) + "," +
+           std::to_string(right_bottom.y);
+  }
+
+  bool valid() {
+    bool area_valid1 = left_top.x != -1 && left_top.y != -1 &&
+                       right_bottom.x != -1 && right_bottom.y != -1;
+    bool area_valid2 =
+        left_top.x < right_bottom.x && left_top.y < right_bottom.y;
+
+    return area_valid1 && area_valid2;
+  }
+
+  void reset() {
+    left_top = Point(-1, -1);
+    right_bottom = Point(-1, -1);
+  }
+  bool contain(Area &a) {
+    log_assert(a.valid(), "invalid area (%d,%d) (%d,%d)", P_ARG(a.left_top),
+               P_ARG(a.right_bottom));
+    return contain(a.left_top) && contain(a.right_bottom);
+  }
+
+  bool contain(const Point &p) {
+    log_assert(valid(), "invalid area (%d,%d) (%d,%d)", P_ARG(left_top),
+               P_ARG(right_bottom));
+    bool x_in = p.x >= left_top.x && p.x <= right_bottom.x;
+    bool y_in = p.y >= left_top.y && p.y <= right_bottom.y;
+    return x_in && y_in;
   }
 };
 

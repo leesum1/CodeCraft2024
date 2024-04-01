@@ -637,7 +637,7 @@ public:
   }
 
   // 机器人指令
-  void robot_move(const int robot_id, const RobotDrirection direction) {
+  void robot_move(const int robot_id, const Direction::Direction direction) {
     commands.push_back({ROBOT_MOVE, robot_id, static_cast<int>(direction)});
   }
   void robot_move(int robot_id, Point to) {
@@ -671,7 +671,7 @@ public:
     return true;
   }
 
-  RobotDrirection calc_direction(const Point &from, const Point &to) {
+  Direction::Direction calc_direction(const Point &from, const Point &to) {
 
     // to 只能是 from 的上下左右，其余情况不合法
     if (abs(from.x - to.x) + abs(from.y - to.y) != 1) {
@@ -681,15 +681,15 @@ public:
 
     if (from.x == to.x) {
       if (from.y > to.y) {
-        return RobotDrirection::LEFT;
+        return Direction::LEFT;
       } else {
-        return RobotDrirection::RIGHT;
+        return Direction::RIGHT;
       }
     } else {
       if (from.x > to.x) {
-        return RobotDrirection::UP;
+        return Direction::UP;
       } else {
-        return RobotDrirection::DOWN;
+        return Direction::DOWN;
       }
     }
   }

@@ -7,10 +7,8 @@
 #include "tools.hpp"
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cmath>
 #include <cstdlib>
-#include <random>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>

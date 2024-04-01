@@ -11,7 +11,7 @@ public:
   int status;
   int berth_id;
   Point pos; // 当前位置
-  RobotDrirection direction;
+  Direction::Direction direction;
 
   // 一些状态位置
   int berth_wait_cycle = 0;       // 等待进入泊位的周期数
@@ -61,7 +61,7 @@ public:
   bool full() { return this->cur_capacity >= this->capacity; }
 
   explicit Ship(int id, int cur_capacity, int max_capacity, const Point &pos,
-                RobotDrirection direction, int status)
+                Direction::Direction direction, int status)
       : id(id), cur_capacity(cur_capacity), capacity(max_capacity),
         status(status), pos(pos), direction(direction) {}
 

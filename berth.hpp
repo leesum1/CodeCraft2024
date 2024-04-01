@@ -7,6 +7,9 @@
 #include <list>
 #include <utility>
 struct Berth {
+  Area berth_area{};
+  Area dock_area{};
+
   Point pos;
   int transport_time;
   int loading_speed;
@@ -94,25 +97,12 @@ struct Berth {
       : id(id), pos(pos), transport_time(transport_time),
         loading_speed(loading_speed) {}
 
-  bool in_berth_area(const Point &p) {
-    const auto &left_top = pos;
-    const auto right_bottom = Point{pos.x + 3, pos.y + 3};
+  void set_berth_area(const Area &area) { berth_area = area; }
+  void set_dock_area(const Area &area) { dock_area = area; }
+  bool in_dock_area(const Point &p) { return dock_area.contain(p); }
+  bool in_berth_area(const Point &p) { return berth_area.contain(p); }
 
-    bool x_in = p.x >= left_top.x && p.x <= right_bottom.x;
-    bool y_in = p.y >= left_top.y && p.y <= right_bottom.y;
-
-    return x_in && y_in;
-  }
-
-  bool in_berth_search_area(const Point &p) {
-    const auto &left_top = Point{pos.x, pos.y};
-    const auto right_bottom = Point{pos.x + 3, pos.y + 3};
-
-    bool x_in = p.x >= left_top.x && p.x <= right_bottom.x;
-    bool y_in = p.y >= left_top.y && p.y <= right_bottom.y;
-
-    return x_in && y_in;
-  }
+  bool in_berth_search_area(const Point &p) { return in_berth_area(p); }
 
   bool is_empty() { return goods_list.empty(); }
   void add_goods(const Goods &g, const int cur_cycle) {

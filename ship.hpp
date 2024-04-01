@@ -1,6 +1,8 @@
 #pragma once
 
+#include "direction.hpp"
 #include "log.h"
+#include "point.hpp"
 class Ship {
 
 public:
@@ -8,21 +10,23 @@ public:
   int capacity;
   int status;
   int berth_id;
+  Point pos; // 当前位置
+  RobotDrirection direction;
 
   // 一些状态位置
-  int berth_wait_cycle;   // 等待进入泊位的周期数
-  int goods_wait_cycle;   // 在泊位等待货物的周期数
-  bool is_last_transport; // 是否是最后一次运输
-  int last_berth_id = -1; // 上一次泊位id
-  bool is_dead = false;   // 无法再接受指令
+  int berth_wait_cycle = 0;       // 等待进入泊位的周期数
+  int goods_wait_cycle = 0;       // 在泊位等待货物的周期数
+  bool is_last_transport = false; // 是否是最后一次运输
+  int last_berth_id = -1;         // 上一次泊位id
+  bool is_dead = false;           // 无法再接受指令
 
-  bool has_change_berth; // 是否已经换泊位,即在泊位中移动
+  bool has_change_berth = false; // 是否已经换泊位,即在泊位中移动
 
-  int cur_capacity; // 当前载重量
-  int cur_value;    // 当前价值
+  int cur_capacity = 0; // 当前载重量
+  int cur_value = 0;    // 当前价值
 
-  int inst_remine_cycle; // 当前指令剩余周期
-  int spend_cycle;       // 当前周期花费
+  int inst_remine_cycle = 0; // 当前指令剩余周期
+  int spend_cycle = 0;       // 当前周期花费
 
   bool good_wait_tolong() { return this->goods_wait_cycle > 50; }
   int capacity_percent() { return this->cur_capacity * 100 / this->capacity; }
@@ -55,6 +59,11 @@ public:
   }
   void in_virtual_point() { this->status = -1; }
   bool full() { return this->cur_capacity >= this->capacity; }
+
+  explicit Ship(int id, int cur_capacity, int max_capacity, const Point &pos,
+                RobotDrirection direction, int status)
+      : id(id), cur_capacity(cur_capacity), capacity(max_capacity),
+        status(status), pos(pos), direction(direction) {}
 
   explicit Ship() {
     this->id = 0;

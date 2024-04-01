@@ -1,6 +1,8 @@
+#pragma once
+
 #include "point.hpp"
 
-enum RobotDrirection { RIGHT, LEFT, UP, DOWN };
+
 
 class Robot {
 
@@ -20,6 +22,9 @@ public:
     this->status = 0;
     this->target_berth_id = -1;
   }
+  explicit Robot(int id, Point pos, bool had_goods, int status)
+      : id(id), pos(pos), had_goods(had_goods), status(status) {}
+
   bool target_berth_is_valid() {
     return target_berth_id >= 0 && target_berth_id < 10;
   }

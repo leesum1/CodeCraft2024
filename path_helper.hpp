@@ -1,3 +1,4 @@
+#pragma once
 
 #include "log.h"
 #include "point.hpp"

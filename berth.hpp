@@ -89,6 +89,11 @@ struct Berth {
   }
 
   Berth() {}
+  Berth(const int id, const Point &pos, const int transport_time,
+        const int loading_speed)
+      : id(id), pos(pos), transport_time(transport_time),
+        loading_speed(loading_speed) {}
+
   bool in_berth_area(const Point &p) {
     const auto &left_top = pos;
     const auto right_bottom = Point{pos.x + 3, pos.y + 3};

@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "config.h"
+#include "io_laye_new.hpp"
 #include "log.h"
 #include "mananger.hpp"
 #include "point.hpp"
@@ -13,19 +14,17 @@ void backtrace_test() {
                                   Point(3, 2)};
 
   // std::reverse(orig_path.begin(), orig_path.end());
-  
+
   std::vector<Point> backtrace_path = {Point(3, 4), Point(3, 5), Point(3, 6),
                                        Point(3, 7), Point(3, 8)};
 
   std::reverse(backtrace_path.begin(), backtrace_path.end());
-
 
   log_info("cur_post:(%d,%d)", cur_post.x, cur_post.y);
   log_info("orig_path.size:%d", orig_path.size());
   for (const auto &p : orig_path) {
     log_info("p:(%d,%d)", p.x, p.y);
   }
-
 
   log_info("backtrace_path.size:%d", backtrace_path.size());
   for (const auto &p : backtrace_path) {
@@ -44,25 +43,30 @@ void backtrace_test() {
   }
 }
 
+void io_layer_test() {
+  auto io_layer = new IoLayerNew();
+  io_layer->init();
+  for (int cycle = 1; cycle <= 15000; cycle++) {
+    io_layer->input_cycle();
+    io_layer->output_cycle();
+  }
+}
+
 int main() {
 
 #ifdef LOG_ENABLE
   log_init("log.txt", 6);
 #endif
-// backtrace_test();
-  auto m = new Manager();
+  // backtrace_test();
 
   try {
 
-    m->init_game();
-    // m.io_layer.test_berths_come_from();
-    m->run_game();
+    io_layer_test();
 
   } catch (const std::exception &e) {
 
     log_fatal("exception:%s", e.what());
   }
-  delete m;
 
   return 0;
 }

@@ -275,8 +275,8 @@ public:
         if (!robot.path_list.empty()) {
           // 还有随机路径时,不需要再次寻找
           robot.update_next_pos();
+          return;
         }
-        return;
       }
     }
 

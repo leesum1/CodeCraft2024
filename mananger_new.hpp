@@ -5,10 +5,12 @@
 #include "log.h"
 #include "point.hpp"
 #include "robot.hpp"
+#include "robot_collision_avoid.hpp"
 #include "robot_control.hpp"
 #include <cmath>
 #include <cstdlib>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -16,7 +18,7 @@ class ManagerNew {
 
 public:
   IoLayerNew io_layer;
-
+  RobotCollisionAvoid robot_collision_avoid{&io_layer};
   ManagerNew() = default;
   ~ManagerNew() = default;
   void init_game() { io_layer.init(); }
@@ -127,7 +129,7 @@ public:
       // 更新货物信息
       goods_list_cycle();
 
-      if (zhen == 1) {
+      if (zhen < 10) {
         io_layer.robot_lbot(io_layer.robot_shops.front());
       }
 
@@ -141,9 +143,14 @@ public:
       }
 
       for (auto &robot : io_layer.robots) {
+        robot_collision_avoid.collision_avoid_step1(robot.id);
+      }
+
+      for (auto &robot : io_layer.robots) {
         RobotControl::robots_move(robot, io_layer);
         RobotControl::robots_pull_cycle(robot, io_layer);
       }
+      check_collision();
       io_layer.output_cycle();
       log_info("map_goods_list size:%d", io_layer.map_goods_list.size());
       io_layer.print_goods_info();
@@ -153,5 +160,25 @@ public:
       }
     }
     io_layer.print_final_info();
+  }
+
+  void check_collision() {
+    std::unordered_set<Point> points_set;
+    bool has_collision = false;
+    for (auto &robot : io_layer.robots) {
+      const auto &cur_pos = robot.pos;
+      const auto &next_pos = robot.get_next_pos();
+      if (points_set.find(next_pos) != points_set.end()) {
+        log_fatal("collision");
+        has_collision = true;
+        break;
+      } else {
+        if (!Point::is_stop_point(next_pos)) {
+          points_set.insert(next_pos);
+        }
+        points_set.insert(cur_pos);
+      }
+    }
+    log_assert(!has_collision, "has_collision");
   }
 };

@@ -3,8 +3,10 @@
 #include "log.h"
 #include "point.hpp"
 #include <algorithm>
+#include <climits>
 #include <cstring>
 #include <functional>
+#include <optional>
 #include <queue>
 #include <unordered_map>
 #include <vector>
@@ -298,6 +300,55 @@ public:
     return path;
   }
 
+  static std::optional<Point>
+  get_bt_point(const Point &cur_pos,
+               const std::unordered_map<Point, PointCost> &come_from,
+               std::function<bool(const Point &)> is_barrier,
+               const std::vector<Point> &avoid_points) {
+    Point best_bt_point = invalid_point; // 最近的且不在同一个直线上的点
+    Point fallback_bt_point = invalid_point; // 在同一直线上最远的点
+    int best_bt_point_cost = INT_MAX;
+    int fallback_bt_point_cost = -1;
+
+    for (const auto &pair : come_from) {
+      const auto &point_cost = pair.second;
+
+      if (is_barrier(point_cost.pos) || point_cost.pos == cur_pos) {
+        continue;
+      }
+      if (std::any_of(avoid_points.begin(), avoid_points.end(),
+                      [&](const Point &p) {
+                        return Point::at_same_row_or_col(p, point_cost.pos);
+                      })) {
+        if (point_cost.cost > fallback_bt_point_cost) {
+          fallback_bt_point = point_cost.pos;
+          fallback_bt_point_cost = point_cost.cost;
+        }
+        continue;
+      }
+
+      if (point_cost.cost < best_bt_point_cost) {
+        best_bt_point = point_cost.pos;
+        best_bt_point_cost = point_cost.cost;
+      }
+    }
+
+    // 如果找不到不在同一条直线上的点，那么就返回
+    // fallback_bt_point（在同一条直线上最远的点）
+    if (best_bt_point == invalid_point) {
+      if (fallback_bt_point == invalid_point) {
+        log_trace("best_bt_point == invalid_point && fallback_bt_point == "
+                  "invalid_point, come_from_size:%d",
+                  come_from.size());
+        return std::nullopt;
+      } else {
+        return fallback_bt_point;
+      }
+    }
+
+    return best_bt_point;
+  };
+
   static void add_backtrace_path(const Point &cur_pos,
                                  std::vector<Point> &orig_path,
                                  const std::vector<Point> &backtrace_path) {
@@ -317,6 +368,10 @@ public:
     }
 
     // const int stop_count = std::rand() % (backtrace_path.size());
+
+    if (backtrace_path.size() == 1) {
+      orig_path.emplace_back(stop_point);
+    }
 
     // for (int i = 0; i < stop_count; i++) {
     //   orig_path.emplace_back(stop_point);

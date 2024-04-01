@@ -6,6 +6,10 @@
 
 class Robot {
 
+private:
+  Point next_pos_final = invalid_point; // 下下次移动的位置
+  bool next_pos_final_is_valid = false;
+
 public:
   int id;                   // 机器人编号
   Point pos;                // 机器人位置
@@ -15,7 +19,7 @@ public:
 
   // 额外信息
   Point next_pos_before_collision_check = invalid_point; // 下一次移动的位置
-  Point next_pos_final = invalid_point;  // 下下次移动的位置
+
   std::vector<Point> path_list{};        // 机器人路径
   bool will_goods_in_this_cycle = false; // 本周期是否拿货
   bool has_pass_collision_check = false; // 是否已经通过碰撞检测
@@ -31,10 +35,14 @@ public:
   }
 
   Point get_next_pos() {
-    if (next_pos_final != invalid_point) {
+    if (next_pos_final_is_valid) {
       return next_pos_final;
     }
     return next_pos_before_collision_check;
+  }
+  void set_final_next_pos(const Point &p) {
+    next_pos_final = p;
+    next_pos_final_is_valid = true;
   }
 
   explicit Robot(int id, Point pos, bool had_goods, int status)
@@ -43,8 +51,9 @@ public:
   void clear_flags() {
     has_pass_collision_check = false;
     will_goods_in_this_cycle = false;
-    next_pos_before_collision_check = invalid_point;
+    next_pos_final_is_valid = false;
     next_pos_final = invalid_point;
+    next_pos_before_collision_check = invalid_point;
   }
 
   bool target_berth_is_valid() {

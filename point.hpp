@@ -33,6 +33,11 @@ struct Point {
     return (at_same_row(p1, p2) && abs(p1.x - p2.x) == 1) ||
            (at_same_col(p1, p2) && abs(p1.y - p2.y) == 1);
   }
+
+  static bool is_stop_point(const Point &p) {
+    return p.x == -2 && p.y == -2 || p.x == -1 && p.y == -1;
+  }
+
   static bool is_same(const Point &p1, const Point &p2) {
     return p1.x == p2.x && p1.y == p2.y;
   }
@@ -66,8 +71,8 @@ struct Area {
 
   std::string to_string() {
     return std::string("left_top:") + std::to_string(left_top.x) + "," +
-           std::to_string(left_top.y) + " right_bottom:" +
-           std::to_string(right_bottom.x) + "," +
+           std::to_string(left_top.y) +
+           " right_bottom:" + std::to_string(right_bottom.x) + "," +
            std::to_string(right_bottom.y);
   }
 

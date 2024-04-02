@@ -24,7 +24,6 @@
 #include <utility>
 #include <vector>
 
-// This is the IoLayer class. It is responsible for all input/output operations.
 class IoLayerNew {
 
 private:
@@ -62,7 +61,7 @@ public:
   const int ship_price = 8000;          // 船只价格
   std::vector<Point> robot_shops{};     // 机器人商店
   std::vector<Point> ship_shops{};      // 船只商店
-  Point delivery_point = invalid_point; // 交付点
+  std::vector<Point> delivery_points{}; // 交货点
 
   int ship_capacity = 0;
 
@@ -72,13 +71,10 @@ public:
 
   bool final_time = false; // 到最后的时间后,机器人之往指定的港口运输货物
 
-  // 港口打表
-  // std::array<std::unordered_map<Point, PointCost>, 10>
-  //     berths_come_from_for_robot;
-  // std::array<std::unordered_set<Point>, 10> berths_come_from_set_for_robot;
-
   std::vector<ComeFromMap> berths_come_from_for_robot{};
   std::vector<ComeFromMap> berths_come_from_for_ship{};
+  std::vector<ComeFromMap> robot_shops_come_from{};
+  std::vector<ComeFromMap> delivery_point_come_from{};
 
   int total_goods_num = 0;    // 总货物数量
   int total_goods_money = 0;  // 总货物价值
@@ -176,66 +172,6 @@ public:
     return {min_berth_id, min_cost};
   }
 
-  // std::optional<int> get_cost_from_berth_to_point(const int berth_id,
-  //                                                 const Point &to) {
-  //   const Point &berth_pos =
-  //       Point(berths[berth_id].pos.x, berths[berth_id].pos.y);
-
-  //   auto &cur_berth_com_from_set = berths_come_from_set_for_robot[berth_id];
-  //   auto &cur_berth_com_from = berths_come_from_for_robot[berth_id];
-
-  //   // 如何确定查找正确？
-  //   if (cur_berth_com_from_set.find(to) != cur_berth_com_from_set.end()) {
-  //     return cur_berth_com_from[to].cost;
-  //   }
-  //   return std::nullopt;
-  // }
-
-  // std::vector<Point> get_path_from_berth_to_point(const int berth_id,
-  //                                                 const Point &to,
-  //                                                 bool &founded) {
-  //   const Point &berth_pos =
-  //       Point(berths[berth_id].pos.x, berths[berth_id].pos.y);
-  //   auto path = PATHHelper::get_path(
-  //       berth_pos, to, berths_come_from_for_robot[berth_id], founded);
-  //   return path;
-  // }
-
-  // std::vector<Point> get_path_from_point_to_berth(const int berth_id,
-  //                                                 const Point &from,
-  //                                                 bool &founded) {
-  //   if (berth_id < 0 || berth_id >= berths.size()) {
-  //     log_fatal("berth id out of range, expect 0~%d, actual:%d",
-  //     berths.size(),
-  //               berth_id);
-  //     assert(false);
-  //   }
-  //   // find the path
-  //   const Point &berth_pos =
-  //       Point(berths[berth_id].pos.x, berths[berth_id].pos.y);
-  //   const Point &goal_pos = from;
-
-  //   auto path = PATHHelper::get_path_reverse(
-  //       berth_pos, goal_pos, berths_come_from_for_robot[berth_id], founded);
-
-  //   log_info("berth[%d] (%d,%d) to (%d,%d) size:%d", berth_id,
-  //   P_ARG(berth_pos),
-  //            P_ARG(goal_pos), path.size());
-
-  //   return path;
-  // }
-
-  int minimal_transport_time() {
-
-    int minimal_time = 999999;
-    for (int i = 0; i < berths.size(); i++) {
-      if (berths[i].transport_time < minimal_time) {
-        minimal_time = berths[i].transport_time;
-      }
-    }
-    return minimal_time;
-  }
-
   void print_goods_info() {
     for (int i = 0; i < berths.size(); i++) {
       log_info("cur_goods_num:%d,cur_goods_value:%d", berths[i].goods_num(),
@@ -266,23 +202,26 @@ public:
             goted_goods_money, selled_goods_num, selled_goods_money);
   }
 
-  void berths_come_from_init() {
+  void all_come_from_init() {
+
+    auto is_barrier_for_robot = [&](const Point &p) {
+      return game_map.is_barrier_for_robot(p);
+    };
+    auto is_neighbors_for_robot = [&](const Point &p) {
+      return game_map.neighbors_for_robot(p);
+    };
+
+    auto is_barrier_for_ship = [&](const Point &p) {
+      return game_map.is_barrier_for_ship(p);
+    };
+    auto is_neighbor_for_ship = [&](const Point &p) {
+      return game_map.neighbors_for_ship(p);
+    };
+
     for (int i = 0; i < berths.size(); i++) {
+      game_map.rand_neighber_again();
+
       const Point &start1 = Point(berths[i].pos.x, berths[i].pos.y);
-
-      auto is_barrier_for_robot = [&](const Point &p) {
-        return game_map.is_barrier_for_robot(p);
-      };
-      auto neighbors_for_robot = [&](const Point &p) {
-        return game_map.neighbors_for_robot(p);
-      };
-
-      auto is_barrier_for_ship = [&](const Point &p) {
-        return game_map.is_barrier_for_ship(p);
-      };
-      auto is_neighbor_for_ship = [&](const Point &p) {
-        return game_map.neighbors_for_ship(p);
-      };
 
       // 主航道（非碰撞区域）的花费为 2
       auto ship_cost = [&](const Point &p) {
@@ -293,30 +232,41 @@ public:
         }
       };
 
-      // berths_come_from_for_robot[i] = PATHHelper::bfs_search(
-      //     start1, ([&](Point p) { return false; }), is_barrier_for_robot,
-      //     neighbors_for_robot, PATHHelper::default_cost, 300000);
-      // berths_come_from_set_for_robot[i] =
-      //     Tools::map_to_set(berths_come_from_for_robot[i]);
-
       berths_come_from_for_robot.emplace_back(ComeFromMap());
       berths_come_from_for_robot.back().init(
           "berth[" + std::to_string(i) + "]_come_from_for_robot", start1,
-          is_barrier_for_robot, neighbors_for_robot, PATHHelper::default_cost);
+          is_barrier_for_robot, is_neighbors_for_robot,
+          PATHHelper::default_cost);
 
       berths_come_from_for_ship.emplace_back(ComeFromMap());
       berths_come_from_for_ship.back().init(
           "berth[" + std::to_string(i) + "]_come_from_for_ship", start1,
           is_barrier_for_ship, is_neighbor_for_ship, ship_cost);
     }
-    log_info("berths_come_from initialized");
-    for (int i = 0; i < berths.size(); i++) {
-      log_info("berth[%d] robot_come_from size:%d,ship_come_from_size:%d", i,
-               berths_come_from_for_robot[i].map_size(),
-               berths_come_from_for_ship[i].map_size());
+
+    for (int i = 0; i < robot_shops.size(); i++) {
+      game_map.rand_neighber_again();
+      const Point &start1 = robot_shops[i];
+      robot_shops_come_from.emplace_back(ComeFromMap());
+      robot_shops_come_from.back().init(
+          "robot_shop[" + std::to_string(i) + "]_come_from", start1,
+          is_barrier_for_robot, is_neighbors_for_robot,
+          PATHHelper::default_cost);
+    }
+
+    for (int i = 0; i < delivery_points.size(); i++) {
+      game_map.rand_neighber_again();
+      const Point &start1 = delivery_points.at(i);
+      delivery_point_come_from.emplace_back(ComeFromMap());
+      delivery_point_come_from.back().init(
+          "delivery_point[" + std::to_string(i) + "]_come_from", start1,
+          is_barrier_for_ship, is_neighbor_for_ship, PATHHelper::default_cost);
     }
   }
-
+  /**
+   * @brief 提取地图中的有效信息,例如机器人商店,船只商店,交货点,港口信息
+   *
+   */
   void map_process() {
     std::chrono::high_resolution_clock::time_point start =
         std::chrono::high_resolution_clock::now();
@@ -354,18 +304,18 @@ public:
         const auto &pos_type = game_map.get_pos_type({i, j});
         switch (pos_type) {
         case GameMap::ROBOT_SHOP: {
-          robot_shops.push_back(Point(i, j));
+          robot_shops.emplace_back(Point(i, j));
           log_trace("robot_shop:(%d,%d)", P_ARG(Point(i, j)));
           break;
         };
         case GameMap::SHIP_SHOP: {
-          ship_shops.push_back(Point(i, j));
+          ship_shops.emplace_back(Point(i, j));
           log_trace("ship_shop:(%d,%d)", P_ARG(Point(i, j)));
           break;
         };
         case GameMap::DELIVERY: {
-          delivery_point = Point(i, j);
-          log_trace("delivery_point:(%d,%d)", P_ARG(delivery_point));
+          delivery_points.emplace_back(i, j);
+          log_trace("delivery_point:(%d,%d)", P_ARG(delivery_points.back()));
           break;
         }
         case GameMap::BERTH: {
@@ -465,8 +415,8 @@ public:
       Point berth_pos = Point(berths[i].pos.x, berths[i].pos.y);
       // auto cur_path = get_path_from_point_to_berth(i, from, found_path);
 
-      auto cur_path = berths_come_from_for_robot[i].get_path_from_point(
-          from, found_path);
+      auto cur_path =
+          berths_come_from_for_robot[i].get_path_from_point(from, found_path);
 
       auto &cur_berth = berths[i];
       if (found_path) {
@@ -511,8 +461,8 @@ public:
 
       Point berth_pos = Point(berths[i].pos.x, berths[i].pos.y);
       // auto cur_path = get_path_from_point_to_berth(i, from, found_path);
-      auto cur_path = berths_come_from_for_robot[i].get_path_from_point(
-          from, found_path);
+      auto cur_path =
+          berths_come_from_for_robot[i].get_path_from_point(from, found_path);
 
       auto &cur_berth = berths[i];
       if (found_path) {
@@ -573,8 +523,8 @@ public:
 
       Point berth_pos = Point(berths[i].pos.x, berths[i].pos.y);
       // auto cur_path = get_path_from_point_to_berth(i, from, found_path);
-      auto cur_path = berths_come_from_for_robot[i].get_path_from_point(
-          from, found_path);
+      auto cur_path =
+          berths_come_from_for_robot[i].get_path_from_point(from, found_path);
 
       if (found_path) {
         if (cur_path.size() < min_dis) {
@@ -594,6 +544,12 @@ public:
     return path;
   }
 
+  /**
+   * @brief 检测点是否在港口区域
+   *
+   * @param p
+   * @return std::optional<int> 港口id
+   */
   std::optional<int> in_berth_area(const Point &p) {
     for (auto &berth : berths) {
       if (berth.in_berth_area(p)) {
@@ -602,22 +558,21 @@ public:
     }
     return std::nullopt;
   }
-
-  std::optional<int> in_berth_search_area(const Point &p) {
-
-    for (auto &berth : berths) {
-      if (berth.in_berth_search_area(p)) {
-        return berth.id;
+  /**
+   * @brief 检测点是否在机器人商店区域
+   *
+   * @param p
+   * @return std::optional<int> 机器人商店位置
+   */
+  std::optional<Point> in_robot_shop_area(const Point &p) {
+    for (int i = 0; i < robot_shops.size(); i++) {
+      // TODO: 扩大范围
+      if (robot_shops[i] == p) {
+        return p;
       }
     }
     return std::nullopt;
   }
-
-  // void robot_dead_list_init() {
-  //   for (int i = 0; i < berths.size(); i++) {
-  //     robots_dead[i] = false;
-  //   }
-  // }
 
   // ------------------------------------------
   // 初始化
@@ -686,13 +641,14 @@ public:
     init_game_map();
     init_berths();
     // game_map.init_robot_pos();
-    berths_come_from_init();
     init_ships();
     auto end = std::chrono::high_resolution_clock::now();
+
+    map_process();
+    all_come_from_init();
     log_info("IoLayer init time:%d ms",
              std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
                  .count());
-    map_process();
     init_done();
   }
 
@@ -876,31 +832,4 @@ public:
     }
     return true;
   }
-
-  //-----------------test----------------------------------
-
-  // void test_berths_come_from() {
-  //   // game_map.print_map_with_point();
-
-  //   for (int i = 100; i < 120; i++) {
-  //     game_map.print_map_line(i);
-  //   }
-
-  //   for (int i = 0; i < berths.size(); i++) {
-  //     // (117,3) (36, 173);
-  //     // (117,3) to (107,122)
-  //     Point cur = Point(107, 122);
-  //     bool founded = false;
-  //     auto path = get_path_from_point_to_berth(i, cur, founded);
-  //     if (founded) {
-  //       log_info("berth[%d] (%d,%d)path size:%d", i, berths[i].pos.x,
-  //                berths[i].pos.y, path.size());
-  //       for (const auto &p : path) {
-  //         log_info("(%d,%d)", p.x, p.y);
-  //       }
-  //     } else {
-  //       log_info("berth[%d] path not found", i);
-  //     }
-  //   }
-  // }
 };

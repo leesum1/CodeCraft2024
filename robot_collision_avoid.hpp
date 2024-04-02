@@ -166,8 +166,9 @@ public:
     return is_barrier_func;
   }
   auto get_find_neighbor_lambda() {
+    io_layer->game_map.rand_neighber_again();
     auto find_neighbor_func = [&](const Point &p) {
-      return io_layer->game_map.neighbors_for_robot(p, false);
+      return io_layer->game_map.neighbors_for_robot(p);
     };
     return find_neighbor_func;
   }

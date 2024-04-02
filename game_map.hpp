@@ -70,6 +70,10 @@ private:
        {'c', {PosType::MAIN_SEA_LAND, main_sea_land_attr}},
        {'T', {PosType::DELIVERY, main_sea_attr}}};
 
+  std::random_device rd;
+  std::vector<std::pair<int, int>> directions = {
+      {1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+
 public:
   std::array<Point, 10> robots_first_pos; // 机器人初始位置
 
@@ -147,41 +151,39 @@ public:
     return true;
   }
 
-  std::vector<Point> neighbors_for_ship(const Point &pos, bool rand = true) {
+  void rand_neighber_again() {
+    std::shuffle(directions.begin(), directions.end(), rd);
+  }
+
+  std::vector<Point> neighbors_for_ship(const Point &pos) {
     std::vector<Point> result;
-    constexpr int dx[4] = {1, -1, 0, 0};
-    constexpr int dy[4] = {0, 0, 1, -1};
     for (int i = 0; i < 4; i++) {
-      const int nx = pos.x + dx[i];
-      const int ny = pos.y + dy[i];
+      const int nx = pos.x + directions[i].first;
+      const int ny = pos.y + directions[i].second;
       if (is_valid_pos(pos) && !is_barrier_for_ship(pos)) {
         result.emplace_back(nx, ny);
       }
     }
-    if (rand) {
-      // 随机打乱
-      std::random_device rd;
-      std::shuffle(result.begin(), result.end(), rd);
+
+    if (std::rand() % 1024 < 100) {
+      rand_neighber_again();
     }
 
     return result;
   }
 
-  std::vector<Point> neighbors_for_robot(const Point &pos, bool rand = true) {
+  std::vector<Point> neighbors_for_robot(const Point &pos) {
     std::vector<Point> result;
-    constexpr int dx[4] = {1, -1, 0, 0};
-    constexpr int dy[4] = {0, 0, 1, -1};
     for (int i = 0; i < 4; i++) {
-      const int nx = pos.x + dx[i];
-      const int ny = pos.y + dy[i];
+      const int nx = pos.x + directions[i].first;
+      const int ny = pos.y + directions[i].second;
       if (is_valid_pos(pos) && !is_barrier_for_robot(pos)) {
         result.emplace_back(nx, ny);
       }
     }
-    if (rand) {
-      // 随机打乱
-      std::random_device rd;
-      std::shuffle(result.begin(), result.end(), rd);
+
+    if (std::rand() % 1024 < 100) {
+      rand_neighber_again();
     }
 
     return result;

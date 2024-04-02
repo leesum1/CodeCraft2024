@@ -30,8 +30,9 @@ struct Point {
   }
   static bool is_adjacent(const Point &p1, const Point &p2) {
     log_assert(!is_same(p1, p2), "is_same");
-    return (at_same_row(p1, p2) && abs(p1.x - p2.x) == 1) ||
-           (at_same_col(p1, p2) && abs(p1.y - p2.y) == 1);
+    // head_pos is not adjacent,(104,136),(105,136)
+    return (at_same_row(p1, p2) && abs(p1.y - p2.y) == 1) ||
+           (at_same_col(p1, p2) && abs(p1.x - p2.x) == 1);
   }
 
   static bool is_stop_point(const Point &p) {
@@ -80,7 +81,7 @@ struct Area {
     bool area_valid1 = left_top.x != -1 && left_top.y != -1 &&
                        right_bottom.x != -1 && right_bottom.y != -1;
     bool area_valid2 =
-        left_top.x < right_bottom.x && left_top.y < right_bottom.y;
+        left_top.x <= right_bottom.x && left_top.y <= right_bottom.y;
 
     return area_valid1 && area_valid2;
   }

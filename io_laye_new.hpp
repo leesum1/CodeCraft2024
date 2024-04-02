@@ -218,19 +218,19 @@ public:
       return game_map.neighbors_for_ship(p);
     };
 
+    // 主航道（非碰撞区域）的花费为 2
+    auto ship_cost = [&](const Point &p) {
+      if (game_map.has_collison_effect_for_ship(p)) {
+        return 1;
+      } else {
+        return 4;
+      }
+    };
+
     for (int i = 0; i < berths.size(); i++) {
       game_map.rand_neighber_again();
 
       const Point &start1 = Point(berths[i].pos.x, berths[i].pos.y);
-
-      // 主航道（非碰撞区域）的花费为 2
-      auto ship_cost = [&](const Point &p) {
-        if (game_map.has_collison_effect_for_ship(p)) {
-          return 1;
-        } else {
-          return 2;
-        }
-      };
 
       berths_come_from_for_robot.emplace_back(ComeFromMap());
       berths_come_from_for_robot.back().init(
@@ -260,7 +260,7 @@ public:
       delivery_point_come_from.emplace_back(ComeFromMap());
       delivery_point_come_from.back().init(
           "delivery_point[" + std::to_string(i) + "]_come_from", start1,
-          is_barrier_for_ship, is_neighbor_for_ship, PATHHelper::default_cost);
+          is_barrier_for_ship, is_neighbor_for_ship, ship_cost);
     }
   }
   /**

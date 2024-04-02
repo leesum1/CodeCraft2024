@@ -4,7 +4,21 @@
 #include "log.h"
 #include "point.hpp"
 #include <array>
+#include <optional>
 #include <utility>
+
+enum class ShipFSM {
+  GO_TO_BERTH,    // 前往泊位
+  GO_TO_DELIVERY, // 前往交货点
+};
+
+enum class ShipCommand {
+  IDLE,                    // 空闲
+  GO,                      // 前进
+  ROTATE_CLOCKWISE,        // 顺时针旋转
+  ROTATE_COUNTERCLOCKWISE, // 逆时针旋转
+
+};
 
 class Ship {
 
@@ -14,57 +28,202 @@ public:
   // 正常行驶状态（状态0）恢复状态（状态1）装载状态（状态2)
   int status;
   int berth_id;
-  Point pos; // 当前位置
+  Point pos; // 当前中心位置
   Direction::Direction direction;
 
+  // 规划的路径
+  std::vector<Point> path{};
+  int target_berth_id = -1; // 目标泊位id
+  ShipFSM fsm = ShipFSM::GO_TO_BERTH;
+
+  // 碰撞检测前计算出来的信息
+  Point next_pos_before_collison = invalid_point;
+  Direction::Direction next_direction_before_collison = Direction::UP;
+  ShipCommand next_command_before_collison = ShipCommand::IDLE;
+
+  // 碰撞检测后计算出来的信息
+  Point next_pos_after_collison = invalid_point;
+  Direction::Direction next_direction_after_collison = Direction::UP;
+  ShipCommand next_command_after_collison = ShipCommand::IDLE;
+
   // 一些状态位置
-  int berth_wait_cycle = 0;       // 等待进入泊位的周期数
-  int goods_wait_cycle = 0;       // 在泊位等待货物的周期数
-  bool is_last_transport = false; // 是否是最后一次运输
-  int last_berth_id = -1;         // 上一次泊位id
-  bool is_dead = false;           // 无法再接受指令
-
-  bool has_change_berth = false; // 是否已经换泊位,即在泊位中移动
-
   int cur_capacity = 0; // 当前载重量
   int cur_value = 0;    // 当前价值
 
-  int inst_remine_cycle = 0; // 当前指令剩余周期
-  int spend_cycle = 0;       // 当前周期花费
+  void clear_flags() {
+    this->next_pos_before_collison = invalid_point;
+    this->next_direction_before_collison = Direction::UP;
+    this->next_command_before_collison = ShipCommand::IDLE;
 
-  bool good_wait_tolong() { return this->goods_wait_cycle > 50; }
+    this->next_pos_after_collison = invalid_point;
+    this->next_direction_after_collison = Direction::UP;
+    this->next_command_after_collison = ShipCommand::IDLE;
+  }
+
+  Point get_next_pos() {
+    if (this->next_pos_after_collison == invalid_point) {
+      return this->pos;
+    }
+    return this->next_pos_after_collison;
+  }
+  Direction::Direction get_next_direction() {
+    if (this->next_pos_after_collison == invalid_point) {
+      return this->direction;
+    }
+    return this->next_direction_after_collison;
+  }
+  ShipCommand get_next_command() {
+    if (this->next_pos_after_collison == invalid_point) {
+      return ShipCommand::IDLE;
+    }
+    return this->next_command_after_collison;
+  }
+
+  void update_ship_next_pos() {
+
+    log_assert(path.size() > 0, "path is empty");
+
+    auto ship_head = get_ship_head();
+
+    // 下一个点相对于当前船头的方向
+    const auto pos_dir = Direction::calc_direction(ship_head, path.back());
+
+    auto update_func = [&](const Point &next_pos,
+                           const Direction::Direction &next_dir,
+                           const ShipCommand &next_command) {
+      this->next_pos_after_collison = next_pos;
+      this->next_direction_after_collison = next_dir;
+      this->next_command_after_collison = next_command;
+    };
+
+    if (pos_dir == this->direction) {
+      // 1.方向相同,前进
+
+      update_func(Direction::move(this->pos, this->direction), this->direction,
+                  ShipCommand::GO);
+
+    } else if (pos_dir == Direction::opposite(this->direction)) {
+      // 2. 方向相反,随便找一个方向旋转
+      bool clockwise = rand() % 2 == 0;
+
+      const auto [next_pos, next_dir] =
+          calc_rot_action(this->pos, this->direction, clockwise);
+      update_func(next_pos, next_dir,
+                  clockwise ? ShipCommand::ROTATE_CLOCKWISE
+                            : ShipCommand::ROTATE_COUNTERCLOCKWISE);
+
+    } else {
+      // 3. 方向相差 90 度,旋转
+      const auto rot_dir =
+          Direction::calc_rotate_direction(this->direction, pos_dir);
+
+      const auto [next_pos, next_dir] = calc_rot_action(
+          this->pos, this->direction, rot_dir.value() == Direction::CLOCKWISE);
+
+      update_func(next_pos, next_dir,
+                  rot_dir.value() == Direction::CLOCKWISE
+                      ? ShipCommand::ROTATE_CLOCKWISE
+                      : ShipCommand::ROTATE_COUNTERCLOCKWISE);
+    }
+  }
+
   int capacity_percent() { return this->cur_capacity * 100 / this->capacity; }
 
-  bool can_accpet_inst() { return this->inst_remine_cycle <= 0; }
+  bool normal_status() { return this->status == 0; }
+  bool recover_status() { return this->status == 1; }
+  bool load_status() { return this->status == 2; }
 
-  std::array<Point, 2> get_ship_head() {
-    switch (this->direction) {
+  /**
+   * @brief 得到船头的位置
+   *
+   * @return
+   */
+  Area get_ship_head() { return calc_ship_head(this->pos, this->direction); }
+  /**
+   * @brief 得到下一个位置的船头位置,如果下一个位置是停止点,返回std::nullopt
+   *
+   * @return
+   */
+  std::optional<Area> get_ship_next_head() {
+    const auto next_pos = this->get_next_pos();
+    const auto next_dir = this->get_next_direction();
+    if (Point::is_stop_point(next_pos)) {
+      return std::nullopt;
+    }
+    return calc_ship_head(next_pos, next_dir);
+  }
+
+  /**
+   * @brief 计算船头的位置
+   *
+   * @param pos 船中心点位置
+   * @param dir 船朝向
+   * @return Area
+   */
+  static Area calc_ship_head(const Point &pos, const Direction::Direction dir) {
+
+    std::array<Point, 2> head_pos{};
+    Area head_area;
+    switch (dir) {
     case Direction::RIGHT: {
-      return {Point(this->pos.x, this->pos.y + 2),
-              Point(this->pos.x + 1, this->pos.y + 2)};
+      head_pos = {Point(pos.x, pos.y + 2), Point(pos.x + 1, pos.y + 2)};
       break;
     }
     case Direction::LEFT: {
-      return {Point(this->pos.x, this->pos.y - 2),
-              Point(this->pos.x - 1, this->pos.y - 2)};
+      head_pos = {Point(pos.x, pos.y - 2), Point(pos.x - 1, pos.y - 2)};
       break;
     }
     case Direction::UP: {
-      return {Point(this->pos.x - 2, this->pos.y),
-              Point(this->pos.x - 2, this->pos.y + 1)};
+      head_pos = {Point(pos.x - 2, pos.y), Point(pos.x - 2, pos.y + 1)};
       break;
     }
     case Direction::DOWN:
-      return {Point(this->pos.x + 2, this->pos.y),
-              Point(this->pos.x + 2, this->pos.y - 1)};
+      head_pos = {Point(pos.x + 2, pos.y), Point(pos.x + 2, pos.y - 1)};
       break;
     }
 
-    log_assert(false, "get_ship_head error");
+    if (head_pos[0].x <= head_pos[1].x && head_pos[0].y <= head_pos[1].y) {
+      head_area = Area(head_pos[0], head_pos[1]);
+    } else {
+      head_area = Area(head_pos[1], head_pos[0]);
+    }
+    log_assert(head_area.valid(), "head_area is invalid");
+    log_assert(Point::is_adjacent(head_pos[0], head_pos[1]),
+               "head_pos is not adjacent,(%d,%d),(%d,%d)", P_ARG(head_pos[0]),
+               P_ARG(head_pos[1]));
+
+    return head_area;
   }
 
+  /**
+   * @brief 得到船的区域
+   *
+   * @return Area
+   */
   Area get_ship_area() { return calc_ship_area(this->pos, this->direction); }
 
+  /**
+   * @brief 得到下一个位置的区域,如果下一个位置是停止点,返回std::nullopt
+   *
+   * @return std::optional<Area>
+   */
+  std::optional<Area> get_ship_next_area() {
+    const auto next_pos = this->get_next_pos();
+    const auto next_dir = this->get_next_direction();
+
+    if (Point::is_stop_point(next_pos)) {
+      return std::nullopt;
+    }
+    return calc_ship_area(next_pos, next_dir);
+  }
+
+  /**
+   * @brief 计算旋转后船的区域位置
+   *
+   * @param pos
+   * @param dir
+   * @return Area
+   */
   static Area calc_ship_area(const Point &pos, Direction::Direction dir) {
     switch (dir) {
     case Direction::RIGHT: {
@@ -87,6 +246,14 @@ public:
     log_assert(false, "get_ship_area error");
   }
 
+  /**
+   * @brief 计算旋转后的位置和方向
+   *
+   * @param pos 当前位置
+   * @param dir 当前方向
+   * @param clockwise_direction 是否顺时针旋转
+   * @return std::pair<Point, Direction::Direction> 旋转后的位置和方向
+   */
   static std::pair<Point, Direction::Direction>
   calc_rot_action(const Point &pos, const Direction::Direction dir,
                   bool clockwise_direction) {
@@ -128,13 +295,6 @@ public:
     return std::make_pair(Point(-1, -1), Direction::UP);
   }
 
-  void new_inst(int inst_cycle) {
-    log_assert(this->inst_remine_cycle == 0, "inst_remine_cycle is not 0 ,%d",
-               this->inst_remine_cycle);
-    log_assert(inst_cycle > 0, "inst_cycle is not positive");
-
-    this->inst_remine_cycle = inst_cycle;
-  }
   void load(int value) {
     log_assert(value > 0 && value <= 200, "value is not positive, %d", value);
     this->cur_capacity++;
@@ -153,7 +313,6 @@ public:
     this->cur_capacity = 0;
     this->cur_value = 0;
   }
-  void in_virtual_point() { this->status = -1; }
   bool full() { return this->cur_capacity >= this->capacity; }
 
   explicit Ship(int id, int cur_capacity, int max_capacity, const Point &pos,
@@ -166,13 +325,7 @@ public:
     this->capacity = 0;
     this->status = 0;
     this->berth_id = -1;
-    this->berth_wait_cycle = 0;
     this->cur_capacity = 0;
     this->cur_value = 0;
-    this->goods_wait_cycle = 0;
-    this->inst_remine_cycle = 0;
-    this->spend_cycle = 0;
-    this->is_last_transport = false;
-    this->is_dead = false;
   }
 };

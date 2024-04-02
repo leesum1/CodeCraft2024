@@ -8,6 +8,38 @@ namespace Direction {
 enum Direction { RIGHT, LEFT, UP, DOWN };
 enum Rotate { CLOCKWISE = 0, COUNTERCLOCKWISE = 1 }; // 顺时针，逆时针
 
+inline Point move(const Point &p, const Direction &dir) {
+  switch (dir) {
+  case Direction::RIGHT:
+    return Point(p.x, p.y + 1);
+  case Direction::LEFT:
+    return Point(p.x, p.y - 1);
+  case Direction::UP:
+    return Point(p.x - 1, p.y);
+  case Direction::DOWN:
+    return Point(p.x + 1, p.y);
+  default:
+    log_fatal("invalid direction %d", dir);
+    assert(false);
+  }
+}
+
+inline Direction opposite(const Direction &dir) {
+  switch (dir) {
+  case Direction::RIGHT:
+    return Direction::LEFT;
+  case Direction::LEFT:
+    return Direction::RIGHT;
+  case Direction::UP:
+    return Direction::DOWN;
+  case Direction::DOWN:
+    return Direction::UP;
+  default:
+    log_fatal("invalid direction %d", dir);
+    assert(false);
+  }
+}
+
 inline std::optional<Rotate> calc_rotate_direction(const Direction &from,
                                                    const Direction &to) {
   if (from == to) {
@@ -72,7 +104,7 @@ inline Direction calc_direction(const Point &from, const Point &to) {
 
 inline Direction calc_direction(Area &from, const Point &to) {
   log_assert(from.valid(), "invalid area %s", from.to_string().c_str());
-  log_assert(!from.contain(to), "from:%s to(%d,%d)", from.to_string().c_str(),
+  log_assert(!from.contain(to), "from:[%s] to(%d,%d)", from.to_string().c_str(),
              P_ARG(to));
 
   if (to.y > from.right_bottom.y) {

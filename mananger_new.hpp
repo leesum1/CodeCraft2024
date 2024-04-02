@@ -8,6 +8,7 @@
 #include "robot_collision_avoid.hpp"
 #include "robot_control.hpp"
 #include "ship.hpp"
+#include "ship_control.hpp"
 #include <cmath>
 #include <cstdlib>
 #include <unordered_map>
@@ -20,6 +21,8 @@ class ManagerNew {
 public:
   IoLayerNew io_layer;
   RobotCollisionAvoid robot_collision_avoid{&io_layer};
+  ShipControl ship_control{&io_layer};
+
   ManagerNew() = default;
   ~ManagerNew() = default;
   void init_game() { io_layer.init(); }
@@ -140,26 +143,36 @@ public:
       if (zhen < 20) {
         io_layer.robot_lbot(io_layer.robot_shops.front());
       }
-      // if (zhen == 1) {
-      //   io_layer.ship_lboat(io_layer.ship_shops.back());
-      // }
+      if (zhen == 1) {
+        io_layer.ship_lboat(io_layer.ship_shops.back());
+      }
 
       for (auto &ship : io_layer.ships) {
-        if (ship.status == 0) {
-          if (first_check_ship_rot) {
-            first_check_ship_rot = false;
-          } else {
-            log_assert(ship.pos == check_ship_rot.first,
-                       "ship(%d,%d) check_ship_rot(%d,%d)", P_ARG(ship.pos),
-                       P_ARG(check_ship_rot.first));
-            log_assert(ship.direction == check_ship_rot.second,
-                       "ship direction:%d check_ship_rot direction:%d",
-                       ship.direction, check_ship_rot.second);
-          }
-          io_layer.ship_rot(ship.id, 0);
-          check_ship_rot = Ship::calc_rot_action(ship.pos, ship.direction, 1);
-        }
+        ship.clear_flags();
       }
+      for (auto &ship : io_layer.ships) {
+        ship_control.go_to_berth(ship);
+        ship_control.go_to_deliver(ship);
+        ship_control.ouput_command(ship);
+      }
+
+      // for (auto &ship : io_layer.ships) {
+      //   if (ship.status == 0) {
+      //     if (first_check_ship_rot) {
+      //       first_check_ship_rot = false;
+      //     } else {
+      //       log_assert(ship.pos == check_ship_rot.first,
+      //                  "ship(%d,%d) check_ship_rot(%d,%d)", P_ARG(ship.pos),
+      //                  P_ARG(check_ship_rot.first));
+      //       log_assert(ship.direction == check_ship_rot.second,
+      //                  "ship direction:%d check_ship_rot direction:%d",
+      //                  ship.direction, check_ship_rot.second);
+      //     }
+      //     io_layer.ship_rot(ship.id, 0);
+      //     check_ship_rot = Ship::calc_rot_action(ship.pos, ship.direction,
+      //     1);
+      //   }
+      // }
 
       for (auto &robot : io_layer.robots) {
         robot.clear_flags();

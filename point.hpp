@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <functional>
 #include <string>
-#include <string_view>
+#include <vector>
 
 #define P_ARG(p) (p).x, (p).y
 
@@ -84,6 +84,19 @@ struct Area {
         left_top.x <= right_bottom.x && left_top.y <= right_bottom.y;
 
     return area_valid1 && area_valid2;
+  }
+
+  std::vector<Point> to_points() {
+    log_assert(valid(), "invalid area (%d,%d) (%d,%d)", P_ARG(left_top),
+               P_ARG(right_bottom));
+
+    std::vector<Point> points;
+    for (int i = left_top.x; i <= right_bottom.x; i++) {
+      for (int j = left_top.y; j <= right_bottom.y; j++) {
+        points.push_back(Point(i, j));
+      }
+    }
+    return points;
   }
 
   void reset() {

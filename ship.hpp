@@ -4,6 +4,7 @@
 #include "log.h"
 #include "point.hpp"
 #include <array>
+#include <functional>
 #include <optional>
 #include <utility>
 
@@ -79,14 +80,15 @@ public:
     return this->next_command_after_collison;
   }
 
-  void update_ship_next_pos() {
+  void update_ship_next_pos(std::function<bool(const Point &p)> is_barrier) {
 
     log_assert(path.size() > 0, "path is empty");
 
     auto ship_head = get_ship_head();
-
+    log_debug("ship[%d],update_ship_next_pos,ship_head:%s", this->id,
+              ship_head.to_string().c_str());
     // 下一个点相对于当前船头的方向
-    const auto pos_dir = Direction::calc_direction(ship_head, path.back());
+    const auto pos_dir_list = Direction::calc_direction(ship_head, path.back());
 
     auto update_func = [&](const Point &next_pos,
                            const Direction::Direction &next_dir,
@@ -96,13 +98,24 @@ public:
       this->next_command_after_collison = next_command;
     };
 
+    Direction::Direction pos_dir;
+    if (pos_dir_list.size() == 1) {
+      pos_dir = pos_dir_list[0];
+    } else {
+      // 有两个方向,选择一个方向
+      pos_dir =
+          this->direction == Direction::opposite_direction(pos_dir_list[0])
+              ? pos_dir_list[1]
+              : pos_dir_list[0];
+    }
+
     if (pos_dir == this->direction) {
       // 1.方向相同,前进
 
       update_func(Direction::move(this->pos, this->direction), this->direction,
                   ShipCommand::GO);
 
-    } else if (pos_dir == Direction::opposite(this->direction)) {
+    } else if (pos_dir == Direction::opposite_direction(this->direction)) {
       // 2. 方向相反,随便找一个方向旋转
       bool clockwise = rand() % 2 == 0;
 
@@ -124,6 +137,83 @@ public:
                   rot_dir.value() == Direction::CLOCKWISE
                       ? ShipCommand::ROTATE_CLOCKWISE
                       : ShipCommand::ROTATE_COUNTERCLOCKWISE);
+    }
+
+    auto next_ship_area = this->get_ship_next_area();
+    if (!next_ship_area.has_value()) {
+      log_trace("ship %d next area is stop point", this->id);
+      return;
+    }
+    std::vector<Point> next_ship_points = next_ship_area.value().to_points();
+    bool will_collison =
+        std::any_of(next_ship_points.begin(), next_ship_points.end(),
+                    [&](const Point &p) { return is_barrier(p); });
+
+    if (will_collison) {
+      log_trace("ship %d will collison", this->id);
+
+      if (pos_dir == this->direction) {
+        log_trace("ship %d will collison, go to rotate", this->id);
+        // 1.方向相同的情况下与地图碰撞,取消直行,改为旋转,旋转方向为目标点相对于船头另一个点(不在同一条直线上)的方向
+        const auto &select_ship_head_point =
+            Point::at_same_row_or_col(ship_head.left_top, path.back())
+                ? ship_head.right_bottom
+                : ship_head.left_top;
+
+        log_trace("select_ship_head_point:%d,%d, path_back(%d,%d)",
+                  P_ARG(select_ship_head_point), P_ARG(path.back()));
+        const auto refined_pos_dir_list = Direction::calc_direction_nocheck(
+            select_ship_head_point, path.back());
+
+        log_assert(refined_pos_dir_list.size() == 2,
+                   "refined_pos_dir_list size is not 2");
+
+        // 进行旋转修正
+        const auto rot_dir = Direction::calc_rotate_direction(
+            this->direction, this->direction == refined_pos_dir_list[0]
+                                 ? refined_pos_dir_list[1]
+                                 : refined_pos_dir_list[0]);
+
+        const auto refined_rot_dir = choose_correct_direction(
+            this->pos, this->direction, rot_dir.value(), is_barrier);
+
+        const auto [next_pos, next_dir] =
+            calc_rot_action(this->pos, this->direction,
+                            refined_rot_dir == Direction::CLOCKWISE);
+
+        update_func(next_pos, next_dir,
+                    refined_rot_dir == Direction::CLOCKWISE
+                        ? ShipCommand::ROTATE_CLOCKWISE
+                        : ShipCommand::ROTATE_COUNTERCLOCKWISE);
+
+      } else if (pos_dir != Direction::opposite_direction(this->direction)) {
+        log_trace("ship %d will collison, go to move", this->id);
+        // 相差90度的情况下与地图碰撞,取消旋转改为直行
+        update_func(Direction::move(this->pos, this->direction),
+                    this->direction, ShipCommand::GO);
+      }
+    }
+  }
+
+  Direction::Rotate
+  choose_correct_direction(const Point &pos,
+                           const Direction::Direction &cur_dir,
+                           const Direction::Rotate &rot_dir,
+                           std::function<bool(const Point &p)> is_barrier) {
+
+    const auto [next_pos, next_dir] =
+        calc_rot_action(pos, cur_dir, rot_dir == Direction::CLOCKWISE);
+
+    auto next_ship_area_points = calc_ship_area(next_pos, next_dir).to_points();
+
+    bool will_collison =
+        std::any_of(next_ship_area_points.begin(), next_ship_area_points.end(),
+                    [&](const Point &p) { return is_barrier(p); });
+
+    if (will_collison) {
+      return Direction::opposite_rotate(rot_dir);
+    } else {
+      return rot_dir;
     }
   }
 

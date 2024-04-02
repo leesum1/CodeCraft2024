@@ -4,7 +4,6 @@
 #include "log.h"
 #include "point.hpp"
 #include "ship.hpp"
-#include <cassert>
 #include <optional>
 
 class ShipControl {
@@ -15,16 +14,24 @@ public:
   ShipControl(IoLayerNew *io_layer) : io_layer(io_layer) {}
   ~ShipControl() = default;
 
-  auto get_is_barrier_lambda(const int ship_id) {
+  auto get_is_barrier_lambda(const int ship_id, bool care_other_ship_cur_pos,
+                             bool care_other_ship_next_pos) {
 
-    auto is_barrier_func = [this, ship_id](const Point &p) {
+    auto is_barrier_func = [this, ship_id, care_other_ship_cur_pos,
+                            care_other_ship_next_pos](const Point &p) {
       bool is_barrier1 = io_layer->game_map.is_barrier_for_ship(p);
       bool is_barrier2 = false;
       bool is_barrier3 = false;
 
+      // 如果没有碰撞效果，直接返回
       if (!io_layer->game_map.has_collison_effect_for_robot(p)) {
         return is_barrier1;
       }
+
+      // 如果不关心其他船的位置，直接返回
+      if (!care_other_ship_cur_pos && !care_other_ship_next_pos) {
+        return is_barrier1;
+      };
 
       for (auto &s : io_layer->ships) {
         if (s.id == ship_id) {
@@ -33,10 +40,12 @@ public:
 
         auto s_cur_area = s.get_ship_area();
         auto s_next_area = s.get_ship_next_area();
-        if (s_cur_area.contain(p)) {
+
+        if (care_other_ship_cur_pos && s_cur_area.contain(p)) {
           is_barrier2 = true;
         }
-        if (s_next_area.has_value() && s_next_area.value().contain(p)) {
+        if (care_other_ship_next_pos && s_next_area.has_value() &&
+            s_next_area.value().contain(p)) {
           is_barrier3 = true;
         }
       }
@@ -71,40 +80,18 @@ public:
     return best_berth_id;
   }
 
+  int get_random_berth_id() {
+    int max_berth_id = io_layer->berths.size() - 1;
+    return std::rand() % max_berth_id;
+  }
+
   int get_best_deliver_id() { return 0; }
 
-  // bool update_ship_next_pos() {
-  // Area head_area;
-  // auto ship_head = get_ship_head();
-  // if (ship_head[0].x <= ship_head[1].x && ship_head[0].y <= ship_head[1].y) {
-  //   head_area = Area(ship_head[0], ship_head[1]);
-  // } else {
-  //   head_area = Area(ship_head[1], ship_head[0]);
-  // }
-  // log_assert(head_area.valid(), "head_area is invalid");
-  //
-  //// 下一个点相对于当前船头的方向
-  // const auto pos_dir = Direction::calc_direction(head_area, path.back());
-  //
-  // if (pos_dir == this->direction) {
-  //  // 前进
-  //} else if (pos_dir == Direction::opposite(this->direction)) {
-  //  // 随便找一个方向旋转
-  //} else {
-  //  // 旋转
-  //  const auto rot_dir =
-  //      Direction::calc_rotate_direction(this->direction, pos_dir);
-  //
-  //  const auto [next_pos, next_dir] = calc_rot_action(
-  //      this->pos, this->direction, rot_dir.value() == Direction::CLOCKWISE);
-  //
-  //  this->next_pos = next_pos;
-  //  this->next_direction = next_dir;
-  //}
-
-  // const auto rot_ret =  calc_rot_action(const Point &pos, const
-  // Direction::Direction dir, bool clockwise_direction)
-  //}
+  int get_random_deliver_id() {
+    int max_deliver_id = io_layer->delivery_points.size() - 1;
+    // return std::rand() % max_deliver_id;
+    return 1;
+  }
 
   void go_to_berth(Ship &ship) {
     if (!ship.normal_status()) {
@@ -114,20 +101,17 @@ public:
       return;
     }
     if (ship.path.size() > 0) {
-      ship.update_ship_next_pos();
+      ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, false, false));
       return;
     }
 
-    auto rich_berth_id = get_rich_berth_id();
+    auto rich_berth_id = get_random_berth_id();
 
-    if (!rich_berth_id.has_value()) {
-      log_info("ship[%d] no rich berth", ship.id);
-      return;
-    }
+
 
     auto ship_head = ship.get_ship_head();
     auto &berth_come_from =
-        io_layer->berths_come_from_for_ship.at(rich_berth_id.value());
+        io_layer->berths_come_from_for_ship.at(rich_berth_id);
 
     bool berth_path_founded = false;
     auto berth_path = berth_come_from.get_path_from_point(ship_head.left_top,
@@ -135,7 +119,7 @@ public:
 
     if (!berth_path_founded) {
       log_info("ship[%d] no berth[%d] path founded", ship.id,
-               rich_berth_id.value());
+               rich_berth_id);
       return;
     }
     log_debug("ship_area:%s", ship_head.to_string().c_str());
@@ -144,7 +128,8 @@ public:
     }
 
     ship.path = berth_path;
-    ship.update_ship_next_pos();
+    drop_path_point_if_reach(ship);
+    ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, false, false));
   }
 
   void go_to_deliver(Ship &ship) {
@@ -156,11 +141,11 @@ public:
     }
 
     if (ship.path.size() > 0) {
-      ship.update_ship_next_pos();
+      ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, false, false));
       return;
     }
 
-    auto best_deliver_id = get_best_deliver_id();
+    auto best_deliver_id = get_random_deliver_id();
 
     const auto ship_head = ship.get_ship_head();
 
@@ -175,7 +160,8 @@ public:
     }
 
     ship.path = deliver_path;
-    ship.update_ship_next_pos();
+    drop_path_point_if_reach(ship);
+    ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, false, false));
   }
 
   void ouput_command(Ship &ship) {
@@ -201,19 +187,7 @@ public:
     }
     }
 
-    auto ship_next_area = ship.get_ship_next_area();
-
-    if (ship_next_area.has_value()) {
-      while (ship.path.size() > 0) {
-        Point p = ship.path.back();
-        if (ship_next_area.value().contain(p) == false) {
-          break;
-        } else {
-          log_info("ship[%d] pop path.back(%d,%d)", ship.id, P_ARG(p));
-          ship.path.pop_back();
-        }
-      }
-    }
+    drop_path_point_if_reach(ship);
 
     if (ship.path.size() == 0) {
       switch (ship.fsm) {
@@ -227,6 +201,38 @@ public:
         log_trace("ship[%d] fsm change to GO_TO_BERTH", ship.id);
         break;
       }
+      }
+    }
+  }
+
+  void drop_path_point_if_reach(Ship &ship) {
+
+    auto ship_cur_area = ship.get_ship_area();
+
+    while (ship.path.size() > 0) {
+      Point p = ship.path.back();
+      if (ship_cur_area.contain(p) == false) {
+        break;
+      } else {
+        log_info("ship[%d] cur_area reach, pop path.back(%d,%d)", ship.id,
+                 P_ARG(p));
+        ship.path.pop_back();
+      }
+    }
+
+    auto ship_next_area = ship.get_ship_next_area();
+    if (!ship_next_area.has_value()) {
+      return;
+    }
+
+    while (ship.path.size() > 0) {
+      Point p = ship.path.back();
+      if (ship_next_area.value().contain(p) == false) {
+        break;
+      } else {
+        log_info("ship[%d] next_area reach pop path.back(%d,%d)", ship.id,
+                 P_ARG(p));
+        ship.path.pop_back();
       }
     }
   }

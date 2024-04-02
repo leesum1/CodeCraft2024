@@ -23,7 +23,7 @@ public:
             std::function<bool(const Point &)> is_barrier,
             std::function<std::vector<Point>(const Point &)> neighbors,
             std::function<int(const Point &)> get_cost) {
-    come_from_map = PATHHelper::bfs_search(
+    come_from_map = PATHHelper::dijkstra_search(
         start, [](const Point &p) { return false; }, is_barrier, neighbors,
         get_cost, 300000);
     come_from_set = Tools::map_to_set(come_from_map);
@@ -63,8 +63,8 @@ public:
 
   void print_all() {
     for (auto &p : come_from_map) {
-      log_trace("%s,come_from_map:(%d,%d), cost %d", name.c_str(), p.first.x, p.first.y,
-                p.second.cost);
+      log_trace("%s,come_from_map:(%d,%d), cost %d", name.c_str(), p.first.x,
+                p.first.y, p.second.cost);
     }
   }
 };

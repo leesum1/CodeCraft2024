@@ -223,7 +223,7 @@ public:
       if (game_map.has_collison_effect_for_ship(p)) {
         return 1;
       } else {
-        return 4;
+        return 2;
       }
     };
 
@@ -315,7 +315,8 @@ public:
         };
         case GameMap::DELIVERY: {
           delivery_points.emplace_back(i, j);
-          log_trace("delivery_point:(%d,%d)", P_ARG(delivery_points.back()));
+          log_trace("delivery_point:(%d,%d),size:%d",
+                    P_ARG(delivery_points.back()), delivery_points.size());
           break;
         }
         case GameMap::BERTH: {

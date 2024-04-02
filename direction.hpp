@@ -4,6 +4,7 @@
 #include "point.hpp"
 #include <map>
 #include <optional>
+#include <vector>
 namespace Direction {
 enum Direction { RIGHT, LEFT, UP, DOWN };
 enum Rotate { CLOCKWISE = 0, COUNTERCLOCKWISE = 1 }; // 顺时针，逆时针
@@ -24,7 +25,19 @@ inline Point move(const Point &p, const Direction &dir) {
   }
 }
 
-inline Direction opposite(const Direction &dir) {
+inline Rotate opposite_rotate(const Rotate &rot) {
+  switch (rot) {
+  case Rotate::CLOCKWISE:
+    return Rotate::COUNTERCLOCKWISE;
+  case Rotate::COUNTERCLOCKWISE:
+    return Rotate::CLOCKWISE;
+  default:
+    log_fatal("invalid rotate %d", rot);
+    assert(false);
+  }
+}
+
+inline Direction opposite_direction(const Direction &dir) {
   switch (dir) {
   case Direction::RIGHT:
     return Direction::LEFT;
@@ -43,6 +56,7 @@ inline Direction opposite(const Direction &dir) {
 inline std::optional<Rotate> calc_rotate_direction(const Direction &from,
                                                    const Direction &to) {
   if (from == to) {
+    log_fatal("from:%d to:%d", from, to);
     return std::nullopt;
   }
 
@@ -58,6 +72,7 @@ inline std::optional<Rotate> calc_rotate_direction(const Direction &from,
 
   auto it = rotate_map.find({from, to});
   if (it == rotate_map.end()) {
+    log_fatal("from:%d to:%d", from, to);
     return std::nullopt;
   }
   return it->second;
@@ -102,39 +117,76 @@ inline Direction calc_direction(const Point &from, const Point &to) {
   }
 }
 
-inline Direction calc_direction(Area &from, const Point &to) {
+inline std::vector<Direction> calc_direction(Area &from, const Point &to) {
   log_assert(from.valid(), "invalid area %s", from.to_string().c_str());
   log_assert(!from.contain(to), "from:[%s] to(%d,%d)", from.to_string().c_str(),
              P_ARG(to));
 
-  if (to.y > from.right_bottom.y) {
-    return Direction::RIGHT;
-  } else if (to.y < from.left_top.y) {
-    return Direction::LEFT;
+  if (to.x >= from.left_top.x && to.x <= from.right_bottom.x) {
+    if (to.y > from.right_bottom.y) {
+      return {Direction::RIGHT};
+    } else if (to.y < from.left_top.y) {
+      return {Direction::LEFT};
+    }
+  } else if (to.y >= from.left_top.y && to.y <= from.right_bottom.y) {
+    if (to.x < from.left_top.x) {
+      return {Direction::UP};
+    } else if (to.x > from.right_bottom.x) {
+      return {Direction::DOWN};
+    }
   } else if (to.x < from.left_top.x) {
-    return Direction::UP;
+    if (to.y < from.left_top.y) {
+      return {Direction::UP, Direction::LEFT};
+    } else if (to.y > from.right_bottom.y) {
+      return {Direction::UP, Direction::RIGHT};
+    }
   } else if (to.x > from.right_bottom.x) {
-    return Direction::DOWN;
-  } else {
-    log_fatal("from:%s to(%d,%d)", from.to_string().c_str(), P_ARG(to));
+    if (to.y < from.left_top.y) {
+      return {Direction::DOWN, Direction::LEFT};
+    } else if (to.y > from.right_bottom.y) {
+      return {Direction::DOWN, Direction::RIGHT};
+    }
   }
+
+  log_fatal("from:%s to(%d,%d)", from.to_string().c_str(), P_ARG(to));
+
+  return {};
 }
 
-inline Direction calc_direction_nocheck(const Point &from, const Point &to) {
+inline std::vector<Direction> calc_direction_nocheck(const Point &from,
+                                                     const Point &to) {
 
-  if (from.x == to.x) {
-    if (from.y > to.y) {
-      return Direction::LEFT;
+  log_assert(from != to, "from(%d,%d) eq to(%d,%d)", from.x, from.y, to.x,
+             to.y);
+
+  if (to.x == from.x) {
+    if (to.y < from.y) {
+      return {Direction::LEFT};
     } else {
-      return Direction::RIGHT;
+      return {Direction::RIGHT};
     }
-  } else {
-    if (from.x > to.x) {
-      return Direction::UP;
+  } else if (to.y == from.y) {
+    if (to.x < from.x) {
+      return {Direction::UP};
     } else {
-      return Direction::DOWN;
+      return {Direction::DOWN};
+    }
+  } else if (to.x > from.x) {
+    if (to.y > from.y) {
+      return {Direction::RIGHT, Direction::DOWN};
+    } else {
+      return {Direction::LEFT, Direction::DOWN};
+    }
+  } else if (to.x < from.x) {
+    if (to.y > from.y) {
+      return {Direction::RIGHT, Direction::UP};
+    } else {
+      return {Direction::LEFT, Direction::UP};
     }
   }
+
+  log_assert(false, "from(%d,%d) to(%d,%d)", from.x, from.y, to.x, to.y);
+  return {};
 }
 
 } // namespace Direction

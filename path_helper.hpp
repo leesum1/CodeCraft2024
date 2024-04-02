@@ -229,6 +229,58 @@ public:
 
     return come_from;
   }
+
+  /**
+   * @brief 一个用于 dijkstra 路径搜索的通用模板
+   *
+   * @param start 搜索的起始点
+   * @param goal  搜索的目标
+   * @param is_barrier
+   * @param neighbors 返回一个点的邻居节点
+   * @param max_level 搜索的最大深度
+   * @return std::unordered_map<Point, PointCost>
+   * come_form,可以找到一个点的父节点和到达该点的代价
+   */
+  static std::unordered_map<Point, PointCost>
+  dijkstra_search(const Point &start, std::function<bool(const Point &)> goal,
+                  std::function<bool(const Point &)> is_barrier,
+                  std::function<std::vector<Point>(Point)> neighbors,
+                  std::function<int(const Point &)> get_cost, int max_level) {
+
+    std::priority_queue<PointCost> q;
+
+    std::unordered_map<Point, PointCost> come_from;
+    int level = 0;
+
+    q.push(PointCost(start, 0));
+    come_from[start] = PointCost(start, 0);
+
+    while (!q.empty() && level < max_level) {
+      int cur_level_size = q.size();
+      for (int i = 0; i < cur_level_size; i++) {
+        const auto cur = q.top();
+
+        if (goal(cur.pos)) {
+          return come_from;
+        }
+
+        q.pop();
+        for (auto &next : neighbors(cur.pos)) {
+          if (is_barrier(next) || come_from.find(next) != come_from.end()) {
+            continue;
+          }
+          const int next_cost = cur.cost + get_cost(next);
+          q.push(PointCost(next, next_cost)); // 当前节点以及到达当前节点的代价
+          come_from[next] =
+              PointCost(cur.pos, next_cost); // 父节点和当前节点的代价
+        }
+      }
+      level++;
+    }
+
+    return come_from;
+  }
+
   /**
    * @brief 从 come_from 中回溯得到 start 到 goal 的路径
    *

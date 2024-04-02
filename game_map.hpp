@@ -61,7 +61,7 @@ private:
        {'.', {PosType::LAND, land_attr}},
        {'>', {PosType::MAIN_LAND, main_land_attr}},
        {'*', {PosType::SEA, sea_attr}},
-       {'~', {PosType::MAIN_SEA_LAND, main_sea_attr}},
+       {'~', {PosType::MAIN_SEA, main_sea_attr}},
        {'R', {PosType::ROBOT_SHOP, main_land_attr}},
        {'S', {PosType::SHIP_SHOP, main_sea_attr}},
        {'B', {PosType::BERTH, main_sea_land_attr}},

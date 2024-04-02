@@ -7,7 +7,7 @@ MAP_PATH = ./maps41
 
 
 RAND_SEED = 14213
-MAP_SEL := map2.txt
+MAP_SEL := map3.txt
 TARGET = $(PWD)/build/main
 # 获取时间戳
 TIMESTAMP = $(shell date +%s)

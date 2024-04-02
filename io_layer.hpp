@@ -298,7 +298,7 @@ public:
 
       berths_come_from[i] =
           PATHHelper::bfs_search(start1, ([&](Point p) { return false; }),
-                                 is_barrier, neighbors, 300000);
+                                 is_barrier, neighbors,PATHHelper::default_cost, 300000);
       berths_come_from_set[i] = Tools::map_to_set(berths_come_from[i]);
     }
     log_info("berths_come_from initialized");
@@ -316,7 +316,7 @@ public:
       auto neighbors = [&](const Point &p) { return game_map.neighbors(p); };
 
       robots_first_pos_come_from[i] = PATHHelper::bfs_search(
-          start, ([&](Point) { return false; }), is_barrier, neighbors, 300000);
+          start, ([&](Point) { return false; }), is_barrier, neighbors,PATHHelper::default_cost, 300000);
     }
     log_info("robots_first_pos_from_init initialized");
 

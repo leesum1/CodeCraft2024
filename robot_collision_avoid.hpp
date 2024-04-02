@@ -26,6 +26,9 @@ public:
     if (Point::is_stop_point(robot_next_pos)) {
       return std::nullopt;
     }
+    if (!io_layer->game_map.has_collison_effect_for_robot(robot_next_pos)) {
+      return std::nullopt;
+    }
 
     for (const auto &r : io_layer->robots) {
       if (r.id == robot_id || r.has_pass_collision_check) {
@@ -51,6 +54,9 @@ public:
     if (Point::is_stop_point(robot_next_pos)) {
       return std::nullopt;
     }
+    if (!io_layer->game_map.has_collison_effect_for_robot(robot_next_pos)) {
+      return std::nullopt;
+    }
     for (auto &r : io_layer->robots) {
       if (r.id == robot_id || r.has_pass_collision_check) {
         // 1. 不需要与自己检查
@@ -72,6 +78,9 @@ public:
   std::optional<int> low_next_pos2high_cur_pos_collision(const int robot_id) {
     const Point &robot_next_pos = io_layer->robots.at(robot_id).get_next_pos();
     if (Point::is_stop_point(robot_next_pos)) {
+      return std::nullopt;
+    }
+    if (!io_layer->game_map.has_collison_effect_for_robot(robot_next_pos)) {
       return std::nullopt;
     }
     for (auto &r : io_layer->robots) {
@@ -96,6 +105,9 @@ public:
   std::optional<int> low_next_pos2high_next_pos_collision(const int robot_id) {
     const Point &robot_next_pos = io_layer->robots.at(robot_id).get_next_pos();
     if (Point::is_stop_point(robot_next_pos)) {
+      return std::nullopt;
+    }
+    if (!io_layer->game_map.has_collison_effect_for_robot(robot_next_pos)) {
       return std::nullopt;
     }
     for (auto &r : io_layer->robots) {
@@ -127,6 +139,10 @@ public:
       bool is_barrier2 = false;
       bool is_barrier3 = false;
 
+      if (!io_layer->game_map.has_collison_effect_for_robot(p)) {
+        return is_barrier1;
+      }
+
       for (auto &r : io_layer->robots) {
         if (r.id == robot_id) {
           continue;
@@ -151,7 +167,7 @@ public:
   }
   auto get_find_neighbor_lambda() {
     auto find_neighbor_func = [&](const Point &p) {
-      return io_layer->game_map.neighbors_for_robot(p);
+      return io_layer->game_map.neighbors_for_robot(p, false);
     };
     return find_neighbor_func;
   }

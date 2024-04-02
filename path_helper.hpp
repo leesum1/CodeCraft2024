@@ -86,7 +86,7 @@ public:
 
     auto come_from = bfs_search(
         start, [&Goal](Point p) { return p == Goal; }, is_barrier, neighbors,
-        30);
+        PATHHelper::default_cost, 30);
     bool founded = false;
     auto path = get_path(start, Goal, come_from, founded);
 
@@ -179,6 +179,8 @@ public:
     return come_from;
   }
 
+  static int default_cost(const Point &p) { return 1; }
+
   /**
    * @brief 一个用于 bfs 路径搜索的通用模板
    *
@@ -194,7 +196,7 @@ public:
   bfs_search(const Point &start, std::function<bool(Point)> goal,
              std::function<bool(Point)> is_barrier,
              std::function<std::vector<Point>(Point)> neighbors,
-             int max_level) {
+             std::function<int(const Point &)> get_cost, int max_level) {
 
     std::queue<Point> q;
     std::unordered_map<Point, PointCost> come_from;
@@ -218,7 +220,8 @@ public:
             continue;
           }
           q.push(next);
-          come_from[next] = PointCost(cur, come_from[cur].cost + 1);
+          come_from[next] =
+              PointCost(cur, come_from[cur].cost + get_cost(next));
         }
       }
       level++;

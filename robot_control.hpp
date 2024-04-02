@@ -26,15 +26,26 @@ public:
         continue;
       };
 
+      // // 找不到路径
+      // if
+      // (io_layer.berths_come_from_set_for_robot_[berth_id].find(goods.second.pos)
+      // ==
+      //     io_layer.berths_come_from_set_for_robot[berth_id].end()) {
+      //   continue;
+      // }
       // 找不到路径
-      if (io_layer.berths_come_from_set[berth_id].find(goods.second.pos) ==
-          io_layer.berths_come_from_set[berth_id].end()) {
+      if (io_layer.berths_come_from_for_robot[berth_id].path_exist(
+              goods.first) == false) {
         continue;
       }
 
-      // 从港口到货物的路径距离
+      // // 从港口到货物的路径距离
+      // const auto to_goods_path_cost =
+      //     io_layer.get_cost_from_berth_to_point(berth_id, goods.first);
+
       const auto to_goods_path_cost =
-          io_layer.get_cost_from_berth_to_point(berth_id, goods.first);
+          io_layer.berths_come_from_for_robot[berth_id].get_point_cost(
+              goods.first);
 
       if (!to_goods_path_cost.has_value()) {
         continue;
@@ -122,8 +133,12 @@ public:
     const auto &goods_final =
         max_weight_hi != -1 ? goods_final_hi : goods_final_lo;
 
-    auto path_tmp = io_layer.get_path_from_berth_to_point(
-        berth_id, goods_final.pos, success);
+    // auto path_tmp = io_layer.get_path_from_berth_to_point(
+    //     berth_id, goods_final.pos, success);
+
+    auto path_tmp =
+        io_layer.berths_come_from_for_robot[berth_id].get_path_to_point(
+            goods_final.pos, success);
 
     log_debug("founded: %d, path_size:%d", founded, path_tmp.size());
 
@@ -449,6 +464,7 @@ public:
                                              IoLayerNew &io_layer) {
     log_trace("robot[%d] find_new_goods start from any postion", robot.id);
 
+    auto start_time = std::chrono::steady_clock::now();
     const auto goods_set = Tools::map_to_set(io_layer.map_goods_list);
 
     auto goods_goal_func = [&](Point p) {
@@ -472,7 +488,13 @@ public:
     bool goods_founded = false;
     auto goods_path = PATHHelper::bfs_path_v1(
         robot.pos, goods_goal_func, get_is_barrier_lambda(io_layer),
-        get_find_neighbor_lambda(io_layer), 30, goods_founded);
+        get_find_neighbor_lambda(io_layer), 20, goods_founded);
+
+    auto end_time = std::chrono::steady_clock::now();
+    log_info("robot[%d] find goods path cost time:%d ms", robot.id,
+             std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
+                                                                   start_time)
+                 .count());
 
     if (!goods_founded) {
       return false;

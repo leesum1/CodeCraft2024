@@ -347,8 +347,7 @@ public:
       // 2. 机器人已经拿到货物
       // 3. 机器人有预定的货物
       io_layer.robot_pull(robot_id);
-      io_layer.goted_goods_num++;
-      io_layer.goted_goods_money += target_goods.money;
+      io_layer.statistic.goted_goods_list.emplace_back(target_goods);
 
       // 更新港口货物信息
       io_layer.berths[berth_id_opt.value()].add_goods(target_goods,
@@ -558,8 +557,7 @@ public:
       // 2. 机器人已经拿到货物
       // 3. 机器人有预定的货物
       io_layer.robot_pull(robot_id);
-      io_layer.goted_goods_num++;
-      io_layer.goted_goods_money += target_goods.money;
+      io_layer.statistic.goted_goods_list.emplace_back(target_goods);
 
       // 清空状态位
       // 1. 机器人的目标货物

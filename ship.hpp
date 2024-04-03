@@ -34,7 +34,8 @@ public:
 
   // 规划的路径
   std::vector<Point> path{};
-  int target_berth_id = -1; // 目标泊位id
+  int target_berth_id = -1;    // 目标泊位id
+  int target_delivery_id = -1; // 目标交货点id
   ShipFSM fsm = ShipFSM::GO_TO_BERTH;
 
   // 碰撞检测前计算出来的信息
@@ -51,6 +52,15 @@ public:
   int cur_capacity = 0; // 当前载重量
   int cur_value = 0;    // 当前价值
 
+  void set_target_berth_id(int target_berth_id) {
+    this->target_berth_id = target_berth_id;
+    this->target_delivery_id = -1;
+  }
+  void set_target_delivery_id(int target_delivery_id) {
+    this->target_delivery_id = target_delivery_id;
+    this->target_berth_id = -1;
+  }
+
   void clear_flags() {
     this->next_pos_before_collison = invalid_point;
     this->next_direction_before_collison = Direction::UP;
@@ -63,19 +73,19 @@ public:
 
   Point get_next_pos() {
     if (this->next_pos_after_collison == invalid_point) {
-      return this->pos;
+      return this->next_pos_before_collison;
     }
     return this->next_pos_after_collison;
   }
   Direction::Direction get_next_direction() {
     if (this->next_pos_after_collison == invalid_point) {
-      return this->direction;
+      return this->next_direction_before_collison;
     }
     return this->next_direction_after_collison;
   }
   ShipCommand get_next_command() {
     if (this->next_pos_after_collison == invalid_point) {
-      return ShipCommand::IDLE;
+      return this->next_command_before_collison;
     }
     return this->next_command_after_collison;
   }
@@ -93,9 +103,9 @@ public:
     auto update_func = [&](const Point &next_pos,
                            const Direction::Direction &next_dir,
                            const ShipCommand &next_command) {
-      this->next_pos_after_collison = next_pos;
-      this->next_direction_after_collison = next_dir;
-      this->next_command_after_collison = next_command;
+      this->next_pos_before_collison = next_pos;
+      this->next_direction_before_collison = next_dir;
+      this->next_command_before_collison = next_command;
     };
 
     Direction::Direction pos_dir;

@@ -10,6 +10,7 @@
 #include "point.hpp"
 #include "robot.hpp"
 #include "ship.hpp"
+#include "statistic.hpp"
 #include <algorithm>
 
 #include <chrono>
@@ -63,6 +64,8 @@ public:
   std::vector<Point> ship_shops{};      // 船只商店
   std::vector<Point> delivery_points{}; // 交货点
 
+  Statistic statistic{};
+
   int ship_capacity = 0;
 
   int new_goods_num = 0; // 新增货物数量
@@ -76,12 +79,12 @@ public:
   std::vector<ComeFromMap> robot_shops_come_from{};
   std::vector<ComeFromMap> delivery_point_come_from{};
 
-  int total_goods_num = 0;    // 总货物数量
-  int total_goods_money = 0;  // 总货物价值
-  int goted_goods_num = 0;    // 已经获取的货物数量
-  int goted_goods_money = 0;  // 已经获取的货物价值
-  int selled_goods_num = 0;   // 已经卖出的货物数量
-  int selled_goods_money = 0; // 已经卖出的货物价值
+  int total_goods_num = 0;   // 总货物数量
+  int total_goods_money = 0; // 总货物价值
+  // int goted_goods_num = 0;    // 已经获取的货物数量
+  // int goted_goods_money = 0;  // 已经获取的货物价值
+  // int selled_goods_num = 0;   // 已经卖出的货物数量
+  // int selled_goods_money = 0; // 已经卖出的货物价值
 
   /* 每帧的输出指令 */
   std::vector<Command> commands;
@@ -117,18 +120,18 @@ public:
     }
     return total_goods_money / total_goods_num;
   }
-  int goted_goods_avg_money() {
-    if (goted_goods_num == 0) {
-      return 0;
-    }
-    return goted_goods_money / goted_goods_num;
-  }
-  int selled_goods_avg_money() {
-    if (selled_goods_num == 0) {
-      return 0;
-    }
-    return selled_goods_money / selled_goods_num;
-  }
+  // int goted_goods_avg_money() {
+  //   if (goted_goods_num == 0) {
+  //     return 0;
+  //   }
+  //   return goted_goods_money / goted_goods_num;
+  // }
+  // int selled_goods_avg_money() {
+  //   if (selled_goods_num == 0) {
+  //     return 0;
+  //   }
+  //   return selled_goods_money / selled_goods_num;
+  // }
 
   /**
    * @brief Represents a pair of integers.
@@ -177,14 +180,14 @@ public:
       log_info("cur_goods_num:%d,cur_goods_value:%d", berths[i].goods_num(),
                berths[i].goods_value());
     }
-    log_info("total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
-             "goted_goods_money:%d,selled_goods_num:%d,selled_goods_money:%d",
-             total_goods_num, total_goods_money, goted_goods_num,
-             goted_goods_money, selled_goods_num, selled_goods_money);
-    log_info("total_goods_avg_money:%d,goted_goods_avg_money:%d,selled_goods_"
-             "avg_money:%d",
-             total_goods_avg_money(), goted_goods_avg_money(),
-             selled_goods_avg_money());
+    // log_info("total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
+    //          "goted_goods_money:%d,selled_goods_num:%d,selled_goods_money:%d",
+    //          total_goods_num, total_goods_money, goted_goods_num,
+    //          goted_goods_money, selled_goods_num, selled_goods_money);
+    // log_info("total_goods_avg_money:%d,goted_goods_avg_money:%d,selled_goods_"
+    //          "avg_money:%d",
+    //          total_goods_avg_money(), goted_goods_avg_money(),
+    //          selled_goods_avg_money());
   }
 
   void print_final_info() {
@@ -195,11 +198,15 @@ public:
       berth.print();
     }
 
-    fprintf(stderr,
-            "total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
-            "goted_goods_money:%d,selled_goods_num:%d,selled_goods_money:%d\n",
-            total_goods_num, total_goods_money, goted_goods_num,
-            goted_goods_money, selled_goods_num, selled_goods_money);
+    statistic.print_goted_goods_value();
+    statistic.print_selled_goods_value();
+    statistic.print_total_goods_value();
+
+    // fprintf(stderr,
+    //         "total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
+    //         "goted_goods_money:%d,selled_goods_num:%d,selled_goods_money:%d\n",
+    //         total_goods_num, total_goods_money, goted_goods_num,
+    //         goted_goods_money, selled_goods_num, selled_goods_money);
   }
 
   void all_come_from_init() {
@@ -671,8 +678,7 @@ public:
             Goods{Point(x, y), money, cur_cycle + 1000, GoodsStatus::Normal});
         log_trace("new goods[%d]:(%d,%d),money:%d,end_cycle:%d", i, x, y, money,
                   cur_cycle + 1000);
-        total_goods_money += money;
-        total_goods_num++;
+        statistic.totol_goods_list.push_back(new_goods_list.back());
       }
     }
 

@@ -72,12 +72,12 @@ public:
               continue;
             }
 
-            if (cur_cost.value() <= 120 &&
-                it->second.money >= io_layer.total_goods_avg_money()) {
-              cur_berth.near_goods_num++;
-              cur_berth.near_goods_value += it->second.money;
-              cur_berth.near_goods_distance += cur_cost.value();
-            }
+            // if (cur_cost.value() <= 120 &&
+            //     it->second.money >= io_layer.total_goods_avg_money()) {
+            //   cur_berth.near_goods_num++;
+            //   cur_berth.near_goods_value += it->second.money;
+            //   cur_berth.near_goods_distance += cur_cost.value();
+            // }
           }
         }
 
@@ -153,6 +153,7 @@ public:
       for (auto &ship : io_layer.ships) {
         ship_control.go_to_berth(ship);
         ship_control.go_to_deliver(ship);
+        ship_control.half_main_sea_avoid(ship);
         ship_control.ouput_command(ship);
       }
 

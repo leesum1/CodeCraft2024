@@ -1,9 +1,11 @@
 #pragma once
 
+#include "direction.hpp"
 #include "io_laye_new.hpp"
 #include "log.h"
 #include "point.hpp"
 #include "ship.hpp"
+#include <algorithm>
 #include <optional>
 
 class ShipControl {
@@ -81,16 +83,17 @@ public:
   }
 
   int get_random_berth_id() {
-    int max_berth_id = io_layer->berths.size() - 1;
+
+    int max_berth_id = io_layer->berths.size();
     return std::rand() % max_berth_id;
   }
 
   int get_best_deliver_id() { return 0; }
 
   int get_random_deliver_id() {
-    int max_deliver_id = io_layer->delivery_points.size() - 1;
-    // return std::rand() % max_deliver_id;
-    return 1;
+
+    int max_deliver_id = io_layer->delivery_points.size();
+    return std::rand() % max_deliver_id;
   }
 
   void go_to_berth(Ship &ship) {
@@ -107,8 +110,6 @@ public:
 
     auto rich_berth_id = get_random_berth_id();
 
-
-
     auto ship_head = ship.get_ship_head();
     auto &berth_come_from =
         io_layer->berths_come_from_for_ship.at(rich_berth_id);
@@ -118,8 +119,7 @@ public:
                                                           berth_path_founded);
 
     if (!berth_path_founded) {
-      log_info("ship[%d] no berth[%d] path founded", ship.id,
-               rich_berth_id);
+      log_info("ship[%d] no berth[%d] path founded", ship.id, rich_berth_id);
       return;
     }
     log_debug("ship_area:%s", ship_head.to_string().c_str());
@@ -127,6 +127,7 @@ public:
       log_info("ship[%d] berth_path(%d,%d)", ship.id, P_ARG(p));
     }
 
+    ship.set_target_berth_id(rich_berth_id);
     ship.path = berth_path;
     drop_path_point_if_reach(ship);
     ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, false, false));
@@ -160,8 +161,69 @@ public:
     }
 
     ship.path = deliver_path;
+    ship.set_target_delivery_id(best_deliver_id);
     drop_path_point_if_reach(ship);
     ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, false, false));
+  }
+
+  void half_main_sea_avoid(Ship &ship) {
+    auto head_area = ship.get_ship_head();
+
+    const bool head1_in_main_sea =
+        io_layer->game_map.has_collison_effect_for_ship(head_area.left_top) ==
+        false;
+    const bool head2_in_main_sea =
+        io_layer->game_map.has_collison_effect_for_ship(
+            head_area.right_bottom) == false;
+    const int in_main_sea_count = head1_in_main_sea + head2_in_main_sea;
+
+    if (in_main_sea_count != 1) {
+      return;
+    }
+
+    log_trace("ship[%d] half_main_sea_avoid", ship.id);
+
+    const Point new_pos_to =
+        head1_in_main_sea ? head_area.right_bottom : head_area.left_top;
+    const Point new_pos_from =
+        head1_in_main_sea ? head_area.left_top : head_area.right_bottom;
+
+    const auto dir_list =
+        Direction::calc_direction_nocheck(new_pos_from, new_pos_to);
+    log_assert(dir_list.size() == 1, "dir_list.size:%d", dir_list.size());
+    log_debug("new_pos_from(%d,%d) new_pos_to(%d,%d) dir:%d",
+              P_ARG(new_pos_from), P_ARG(new_pos_to), dir_list.front());
+    const auto rot_dir =
+        Direction::calc_rotate_direction(ship.direction, dir_list.front());
+    log_assert(rot_dir.has_value(), "rot_dir not valid");
+
+    const auto [next_pos, next_dir] = Ship::calc_rot_action(
+        ship.pos, ship.direction, rot_dir.value() == Direction::CLOCKWISE);
+
+    auto new_ship_area = ship.calc_ship_area(next_pos, next_dir);
+
+    const auto new_ship_area_points = new_ship_area.to_points();
+
+    if (std::any_of(new_ship_area_points.begin(), new_ship_area_points.end(),
+                    [this](const Point &p) {
+                      return io_layer->game_map.is_barrier_for_ship(p);
+                    })) {
+      log_info("ship[%d] half_main_sea_avoid failed", ship.id);
+      return;
+    }
+    const auto next_command = rot_dir.value() == Direction::CLOCKWISE
+                                  ? ShipCommand::ROTATE_CLOCKWISE
+                                  : ShipCommand::ROTATE_COUNTERCLOCKWISE;
+
+    log_trace("ship[%d] half_main_sea_avoid success", ship.id);
+    log_trace(" pre pos:(%d,%d),pre dir:%d, pre command:%d", P_ARG(ship.pos),
+              ship.direction, ship.get_next_command());
+    log_trace("next pos:(%d,%d),next dir:%d, next command:%d", P_ARG(next_pos),
+              next_dir, next_command);
+
+    ship.next_direction_before_collison = next_dir;
+    ship.next_pos_before_collison = next_pos;
+    ship.next_command_before_collison = next_command;
   }
 
   void ouput_command(Ship &ship) {

@@ -2,7 +2,9 @@
 *.log
 replay/
 maps/
+maps41/
 build/
 .*/
 cmake-build-debug/
 zip/
+script/

@@ -5,6 +5,7 @@
 #include "point.hpp"
 #include <algorithm>
 #include <list>
+#include <optional>
 #include <utility>
 struct Berth {
   Area berth_area{};
@@ -14,6 +15,9 @@ struct Berth {
   int transport_time;
   int loading_speed;
   int id;
+
+
+  std::optional<int> occupied_ship_id = std::nullopt;
 
   int avg_berth_transport_time = 0;  // 平均港口运输时间
   float avg_berth_loading_speed = 0; // 平均港口装货速度
@@ -69,13 +73,16 @@ struct Berth {
 
   int goods_num() { return goods_list.size(); }
   int goods_value() {
-    int sum = 0;
-    std::for_each(goods_list.begin(), goods_list.end(),
-                  [&sum](const Goods &g) { sum += g.money; });
-    return sum;
+    return goods_goods_first_n(goods_list.size()).second;
   }
 
-  int get_goods_value_sum_n(int n) {
+  /**
+   * @brief 获取前n个货物的价值
+   *
+   * @param n
+   * @return std::pair<int,int> first:实际获取的货物数量，second:货物价值
+   */
+  std::pair<int,int> goods_goods_first_n(int n) {
     int sum = 0;
     auto it = goods_list.begin();
     const int max_n = std::min(n, (int)goods_list.size());
@@ -84,12 +91,11 @@ struct Berth {
       sum += it->money;
       it++;
     }
-    if (max_n < n) {
-      sum += (money_in_1000cycle() / 2); // 加上增长趋势
-    }
-
-    return sum;
+    return {max_n, sum};
   }
+
+
+
 
   Berth() {}
   Berth(const int id, const Point &pos, const int transport_time,

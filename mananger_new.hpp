@@ -143,9 +143,17 @@ public:
       if (zhen < 20) {
         io_layer.robot_lbot(io_layer.robot_shops.front());
       }
-      if (zhen == 1) {
-        io_layer.ship_lboat(io_layer.ship_shops.back());
-      }
+      // if (zhen == 1) {
+      //   io_layer.ship_lboat(io_layer.ship_shops.back());
+      // }
+
+      // if (zhen == 100) {
+      //   io_layer.ship_lboat(io_layer.ship_shops.front());
+      // }
+
+      // if (zhen == 1000) {
+      //   io_layer.ship_lboat(io_layer.ship_shops.back());
+      // }
 
       for (auto &ship : io_layer.ships) {
         ship.clear_flags();
@@ -154,7 +162,7 @@ public:
         ship_control.go_to_berth(ship);
         ship_control.go_to_deliver(ship);
         ship_control.half_main_sea_avoid(ship);
-        ship_control.ouput_command(ship);
+          ship_control.output_command(ship);
       }
 
       // for (auto &ship : io_layer.ships) {
@@ -224,9 +232,9 @@ public:
       const auto &cur_pos = robot.pos;
       const auto &next_pos = robot.get_next_pos();
       const bool cur_pos_has_collision_effect =
-          io_layer.game_map.has_collison_effect_for_robot(cur_pos);
+              io_layer.game_map.has_collision_effect_for_robot(cur_pos);
       const bool next_pos_has_collision_effect =
-          io_layer.game_map.has_collison_effect_for_robot(next_pos);
+              io_layer.game_map.has_collision_effect_for_robot(next_pos);
       const bool cur_pos_is_stop = Point::is_stop_point(cur_pos);
       const bool next_pos_is_stop = Point::is_stop_point(next_pos);
 

@@ -39,8 +39,8 @@ void log_write(int level, const char *file, int line, const char *fmt, ...) {
   static char buf[1000];
 
   std::time_t t = std::time(nullptr);
-  char timebuf[20];
-  std::strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S",
+  char time_buf[20];
+  std::strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S",
                 std::localtime(&t));
 
   va_list args;
@@ -48,7 +48,7 @@ void log_write(int level, const char *file, int line, const char *fmt, ...) {
   vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
 
-  log_file.value() << timebuf << " " << log_level_str[level] << " " << file
+  log_file.value() << time_buf << " " << log_level_str[level] << " " << file
                    << ":" << line << " " << buf << std::endl;
   log_file.value().flush();
 }

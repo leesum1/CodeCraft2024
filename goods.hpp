@@ -17,7 +17,7 @@ public:
   int end_cycle;      // 货物消失的周期
   GoodsStatus status; // 货物状态
 
-  std::string to_string() const {
+   std::string to_string() const {
     return "Goods: pos: (" + std::to_string(pos.x) + ", " +
            std::to_string(pos.y) + "), money: " + std::to_string(money) +
            ", end_cycle: " + std::to_string(end_cycle) +
@@ -38,7 +38,7 @@ public:
   Goods(const Goods &other)
       : pos(other.pos), money(other.money), end_cycle(other.end_cycle),
         status(other.status) {}
-  ~Goods() {}
+  ~Goods() = default;
 
   bool operator==(const Goods &other) const {
     return pos == other.pos && money == other.money &&

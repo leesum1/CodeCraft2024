@@ -26,7 +26,7 @@ public:
     if (Point::is_stop_point(robot_next_pos)) {
       return std::nullopt;
     }
-    if (!io_layer->game_map.has_collison_effect_for_robot(robot_next_pos)) {
+    if (!io_layer->game_map.has_collision_effect_for_robot(robot_next_pos)) {
       return std::nullopt;
     }
 
@@ -54,7 +54,7 @@ public:
     if (Point::is_stop_point(robot_next_pos)) {
       return std::nullopt;
     }
-    if (!io_layer->game_map.has_collison_effect_for_robot(robot_next_pos)) {
+    if (!io_layer->game_map.has_collision_effect_for_robot(robot_next_pos)) {
       return std::nullopt;
     }
     for (auto &r : io_layer->robots) {
@@ -80,7 +80,7 @@ public:
     if (Point::is_stop_point(robot_next_pos)) {
       return std::nullopt;
     }
-    if (!io_layer->game_map.has_collison_effect_for_robot(robot_next_pos)) {
+    if (!io_layer->game_map.has_collision_effect_for_robot(robot_next_pos)) {
       return std::nullopt;
     }
     for (auto &r : io_layer->robots) {
@@ -107,7 +107,7 @@ public:
     if (Point::is_stop_point(robot_next_pos)) {
       return std::nullopt;
     }
-    if (!io_layer->game_map.has_collison_effect_for_robot(robot_next_pos)) {
+    if (!io_layer->game_map.has_collision_effect_for_robot(robot_next_pos)) {
       return std::nullopt;
     }
     for (auto &r : io_layer->robots) {
@@ -139,7 +139,7 @@ public:
       bool is_barrier2 = false;
       bool is_barrier3 = false;
 
-      if (!io_layer->game_map.has_collison_effect_for_robot(p)) {
+      if (!io_layer->game_map.has_collision_effect_for_robot(p)) {
         return is_barrier1;
       }
 
@@ -147,7 +147,7 @@ public:
         if (r.id == robot_id) {
           continue;
         }
-        if (only_care_high_priority && r.has_pass_collision_check == false) {
+        if (only_care_high_priority && !r.has_pass_collision_check) {
           continue;
         }
         if (only_care_neighbor && !Point::is_adjacent(r.pos, p)) {
@@ -279,7 +279,7 @@ public:
   fallback_to_bt_path(const int robot_id,
                       const std::unordered_map<Point, PointCost> &come_from,
                       const std::vector<Point> &avoid_points,
-                      std::function<void()> fail_callback) {
+                      const std::function<void()>& fail_callback) {
     auto &cur_robot = io_layer->robots.at(robot_id);
     auto bt_point = PATHHelper::get_bt_point(
         cur_robot.pos, come_from, get_is_barrier_lambda(robot_id, true, false),

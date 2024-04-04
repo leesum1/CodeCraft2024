@@ -4,6 +4,7 @@
 #include "log.h"
 #include "point.hpp"
 #include <array>
+#include <cstdlib>
 #include <functional>
 #include <optional>
 #include <utility>
@@ -113,10 +114,19 @@ public:
       pos_dir = pos_dir_list[0];
     } else {
       // 有两个方向,选择一个方向
-      pos_dir =
-          this->direction == Direction::opposite_direction(pos_dir_list[0])
-              ? pos_dir_list[1]
-              : pos_dir_list[0];
+      const bool pos_dir0_is_opposite =
+          this->direction == Direction::opposite_direction(pos_dir_list[0]);
+      const bool pos_dir1_is_opposite =
+          this->direction == Direction::opposite_direction(pos_dir_list[1]);
+
+      if (pos_dir0_is_opposite && !pos_dir1_is_opposite) {
+        pos_dir = pos_dir_list[1];
+      } else if (!pos_dir0_is_opposite && pos_dir1_is_opposite) {
+        pos_dir = pos_dir_list[0];
+      } else {
+        // 两个方向都是相反方向,或者都不是相反方向随机选一个
+        pos_dir = pos_dir_list[std::rand() % pos_dir_list.size()];
+      }
     }
 
     if (pos_dir == this->direction) {
@@ -161,7 +171,6 @@ public:
 
     if (will_collison) {
       log_trace("ship %d will collison", this->id);
-
       if (pos_dir == this->direction) {
         log_trace("ship %d will collison, go to rotate", this->id);
         // 1.方向相同的情况下与地图碰撞,取消直行,改为旋转,旋转方向为目标点相对于船头另一个点(不在同一条直线上)的方向
@@ -198,9 +207,28 @@ public:
 
       } else if (pos_dir != Direction::opposite_direction(this->direction)) {
         log_trace("ship %d will collison, go to move", this->id);
-        // 相差90度的情况下与地图碰撞,取消旋转改为直行
-        update_func(Direction::move(this->pos, this->direction),
-                    this->direction, ShipCommand::GO);
+
+        // 1. 选择往相反的方向旋转
+        const auto rot_dir =
+            Direction::calc_rotate_direction(this->direction, pos_dir);
+        log_assert(rot_dir.has_value(), "rot_dir not valid");
+        const auto rot_dir_opposite =
+            Direction::opposite_rotate(rot_dir.value());
+
+        const auto [next_pos, next_dir] =
+            calc_rot_action(this->pos, this->direction,
+                            rot_dir_opposite == Direction::CLOCKWISE);
+        const auto next_command = rot_dir_opposite == Direction::CLOCKWISE
+                                      ? ShipCommand::ROTATE_CLOCKWISE
+                                      : ShipCommand::ROTATE_COUNTERCLOCKWISE;
+        if (std::rand() % 2 == 0) {
+          // 1. 选择往相反的方向旋转
+          update_func(next_pos, next_dir, next_command);
+        } else {
+          // 2. 取消旋转，改为前进
+          update_func(Direction::move(this->pos, this->direction),
+                      this->direction, ShipCommand::GO);
+        }
       }
     }
   }

@@ -19,7 +19,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <optional>
-#include <stdio.h>
+#include <cstdio>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -89,17 +89,17 @@ public:
   /* 每帧的输出指令 */
   std::vector<Command> commands;
 
-  explicit IoLayerNew() {}
-  ~IoLayerNew(){};
+  explicit IoLayerNew() = default;
+  ~IoLayerNew()= default;
 
   bool berth_is_baned(const int berth_id) {
     // 到了最后时刻,只能往指定的港口运输货物
     if (final_time) {
       std::vector<int> final_berth;
       // 将还能动的船的目的地加入
-      for (int i = 0; i < ships.size(); i++) {
-        if (ships[i].berth_id != -1) {
-          final_berth.push_back(ships[i].berth_id);
+      for (auto & ship : ships) {
+        if (ship.berth_id != -1) {
+          final_berth.push_back(ship.berth_id);
         }
       }
       if (!berths[berth_id].is_baned) {
@@ -176,9 +176,9 @@ public:
   }
 
   void print_goods_info() {
-    for (int i = 0; i < berths.size(); i++) {
-      log_info("cur_goods_num:%d,cur_goods_value:%d", berths[i].goods_num(),
-               berths[i].goods_value());
+    for (auto & berth : berths) {
+      log_info("cur_goods_num:%d,cur_goods_value:%d", berth.goods_num(),
+               berth.goods_value());
     }
     // log_info("total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
     //          "goted_goods_money:%d,selled_goods_num:%d,selled_goods_money:%d",
@@ -202,11 +202,12 @@ public:
     statistic.print_selled_goods_value();
     statistic.print_total_goods_value();
 
-    // fprintf(stderr,
-    //         "total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
-    //         "goted_goods_money:%d,selled_goods_num:%d,selled_goods_money:%d\n",
-    //         total_goods_num, total_goods_money, goted_goods_num,
-    //         goted_goods_money, selled_goods_num, selled_goods_money);
+    fprintf(stderr,
+            "total_goods_num:%zu,total_goods_money:%d,goted_goods_num:%zu,"
+            "goted_goods_money:%d,selled_goods_num:%zu,selled_goods_money:%d\n",
+            statistic.totol_goods_list.size(), statistic.total_goods_value(),
+            statistic.goted_goods_list.size(), statistic.goted_goods_value(),
+            statistic.selled_goods_list.size(), statistic.selled_goods_value());
   }
 
   void all_come_from_init() {
@@ -227,7 +228,7 @@ public:
 
     // 主航道（非碰撞区域）的花费为 2
     auto ship_cost = [&](const Point &p) {
-      if (game_map.has_collison_effect_for_ship(p)) {
+      if (game_map.has_collision_effect_for_ship(p)) {
         return 1;
       } else {
         return 2;
@@ -239,13 +240,13 @@ public:
 
       const Point &start1 = Point(berths[i].pos.x, berths[i].pos.y);
 
-      berths_come_from_for_robot.emplace_back(ComeFromMap());
+      berths_come_from_for_robot.emplace_back();
       berths_come_from_for_robot.back().init(
           "berth[" + std::to_string(i) + "]_come_from_for_robot", start1,
           is_barrier_for_robot, is_neighbors_for_robot,
           PATHHelper::default_cost);
 
-      berths_come_from_for_ship.emplace_back(ComeFromMap());
+      berths_come_from_for_ship.emplace_back();
       berths_come_from_for_ship.back().init(
           "berth[" + std::to_string(i) + "]_come_from_for_ship", start1,
           is_barrier_for_ship, is_neighbor_for_ship, ship_cost);
@@ -254,7 +255,7 @@ public:
     for (int i = 0; i < robot_shops.size(); i++) {
       game_map.rand_neighber_again();
       const Point &start1 = robot_shops[i];
-      robot_shops_come_from.emplace_back(ComeFromMap());
+      robot_shops_come_from.emplace_back();
       robot_shops_come_from.back().init(
           "robot_shop[" + std::to_string(i) + "]_come_from", start1,
           is_barrier_for_robot, is_neighbors_for_robot,
@@ -311,15 +312,15 @@ public:
         const auto &pos_type = game_map.get_pos_type({i, j});
         switch (pos_type) {
         case GameMap::ROBOT_SHOP: {
-          robot_shops.emplace_back(Point(i, j));
+          robot_shops.emplace_back(i, j);
           log_trace("robot_shop:(%d,%d)", P_ARG(Point(i, j)));
           break;
-        };
+        }
         case GameMap::SHIP_SHOP: {
-          ship_shops.emplace_back(Point(i, j));
+          ship_shops.emplace_back(i, j);
           log_trace("ship_shop:(%d,%d)", P_ARG(Point(i, j)));
           break;
-        };
+        }
         case GameMap::DELIVERY: {
           delivery_points.emplace_back(i, j);
           log_trace("delivery_point:(%d,%d),size:%d",
@@ -619,15 +620,15 @@ public:
 
     // 计算 transport_time 平均数
     int loading_speed_sum = 0;
-    for (int i = 0; i < berths.size(); i++) {
-      loading_speed_sum += berths[i].loading_speed;
+    for (auto & berth : berths) {
+      loading_speed_sum += berth.loading_speed;
     }
 
     float loading_speed_avg =
         static_cast<float>(loading_speed_sum) / berths.size();
 
-    for (int i = 0; i < berths.size(); i++) {
-      berths[i].avg_berth_loading_speed = loading_speed_avg;
+    for (auto & berth : berths) {
+      berth.avg_berth_loading_speed = loading_speed_avg;
     }
     log_info("Berths initialized,loading_speed_avg:%f", loading_speed_avg);
   }
@@ -674,8 +675,7 @@ public:
       int x, y, money;
       scanf("%d%d%d", &x, &y, &money);
       if (money != 0) {
-        new_goods_list.push_back(
-            Goods{Point(x, y), money, cur_cycle + 1000, GoodsStatus::Normal});
+        new_goods_list.emplace_back(Point(x, y), money, cur_cycle + 1000, GoodsStatus::Normal);
         log_trace("new goods[%d]:(%d,%d),money:%d,end_cycle:%d", i, x, y, money,
                   cur_cycle + 1000);
         statistic.totol_goods_list.push_back(new_goods_list.back());
@@ -693,7 +693,7 @@ public:
       if (std::find_if(robots.begin(), robots.end(), [&id](Robot &r) {
             return r.id == id;
           }) == robots.end()) {
-        robots.emplace_back(Robot{id, Point(x, y), goods == 1, 1});
+        robots.emplace_back(id, Point(x, y), goods == 1, 1);
         log_info("new robot[%d](%d,%d),goods:%d", i, x, y, goods);
         continue;
       }
@@ -721,8 +721,8 @@ public:
       if (std::find_if(ships.begin(), ships.end(), [&ship_id](Ship &ship) {
             return ship.id == ship_id;
           }) == ships.end()) {
-        ships.push_back(Ship{ship_id, goods_num, ship_capacity, Point(x, y),
-                             Direction::int_to_direction(direction), status});
+        ships.emplace_back(ship_id, goods_num, ship_capacity, Point(x, y),
+                             Direction::int_to_direction(direction), status);
         log_info("new ship[%d](%d,%d)", i, x, y);
         continue;
       }

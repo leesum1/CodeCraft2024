@@ -136,14 +136,14 @@ public:
     return true;
   }
 
-  bool has_collison_effect_for_robot(const Point &pos) {
+  bool has_collision_effect_for_robot(const Point &pos) {
     if (is_valid_pos(pos)) {
       return lookuptable.at(map[pos.x][pos.y])
           .second.has_collison_effect_for_robot;
     }
     return true;
   }
-  bool has_collison_effect_for_ship(const Point &pos) {
+  bool has_collision_effect_for_ship(const Point &pos) {
     if (is_valid_pos(pos)) {
       return lookuptable.at(map[pos.x][pos.y])
           .second.has_collison_effect_for_ship;
@@ -165,7 +165,7 @@ public:
       }
     }
 
-    if (std::rand() % 1024 < 100) {
+    if (std::rand() % 1024 < 200) {
       rand_neighber_again();
     }
 
@@ -189,35 +189,8 @@ public:
     return result;
   }
 
-  // TODO: remove this function
-  bool is_barrier(const Point &pos) {
-    PosType type = get_pos_type(pos);
-    return true;
-  }
-  // TODO: remove this function
-  bool is_space(Point &pos) { return !is_barrier(pos); }
 
-  // TODO: remove this function
-  std::vector<Point> neighbors(const Point &pos, bool rand = true) {
-    std::vector<Point> result;
-    constexpr int dx[4] = {1, -1, 0, 0};
-    constexpr int dy[4] = {0, 0, 1, -1};
-    for (int i = 0; i < 4; i++) {
-      const int nx = pos.x + dx[i];
-      const int ny = pos.y + dy[i];
-      if (is_valid_pos(pos) && !is_barrier(pos)) {
-        result.emplace_back(nx, ny);
-      }
-    }
-    if (rand) {
-      // 随机打乱
-      std::random_device rd;
-      std::shuffle(result.begin(), result.end(), rd);
-    }
-
-    return result;
-  }
-  void write_line(char *buf, int x) {
+  void write_line(const char *buf, int x) {
     for (int i = 0; i < 200; i++) {
       map[x][i] = buf[i];
     }

@@ -13,7 +13,7 @@ class ShipControl {
   IoLayerNew *io_layer = nullptr;
 
 public:
-  ShipControl(IoLayerNew *io_layer) : io_layer(io_layer) {}
+  explicit ShipControl(IoLayerNew *io_layer) : io_layer(io_layer) {}
   ~ShipControl() = default;
 
   auto get_is_barrier_lambda(const int ship_id, bool care_other_ship_cur_pos,
@@ -26,7 +26,7 @@ public:
       bool is_barrier3 = false;
 
       // 如果没有碰撞效果，直接返回
-      if (!io_layer->game_map.has_collison_effect_for_robot(p)) {
+      if (!io_layer->game_map.has_collision_effect_for_ship(p)) {
         return is_barrier1;
       }
 
@@ -56,13 +56,7 @@ public:
     return is_barrier_func;
   }
 
-  auto get_find_neighbor_lambda(IoLayerNew &io_layer) {
-    io_layer.game_map.rand_neighber_again();
-    auto find_neighbor = [&](const Point &p) {
-      return io_layer.game_map.neighbors_for_ship(p);
-    };
-    return find_neighbor;
-  }
+
 
   /**
    * @brief 找到最有价值的泊位
@@ -103,8 +97,8 @@ public:
     if (ship.fsm != ShipFSM::GO_TO_BERTH) {
       return;
     }
-    if (ship.path.size() > 0) {
-      ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, false, false));
+    if (!ship.path.empty()) {
+      ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, true, true));
       return;
     }
 
@@ -130,7 +124,7 @@ public:
     ship.set_target_berth_id(rich_berth_id);
     ship.path = berth_path;
     drop_path_point_if_reach(ship);
-    ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, false, false));
+    ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, true, true));
   }
 
   void go_to_deliver(Ship &ship) {
@@ -141,8 +135,8 @@ public:
       return;
     }
 
-    if (ship.path.size() > 0) {
-      ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, false, false));
+    if (!ship.path.empty()) {
+      ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, true, true));
       return;
     }
 
@@ -163,18 +157,17 @@ public:
     ship.path = deliver_path;
     ship.set_target_delivery_id(best_deliver_id);
     drop_path_point_if_reach(ship);
-    ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, false, false));
+    ship.update_ship_next_pos(get_is_barrier_lambda(ship.id, true, true));
   }
-
+  
   void half_main_sea_avoid(Ship &ship) {
     auto head_area = ship.get_ship_head();
 
     const bool head1_in_main_sea =
-        io_layer->game_map.has_collison_effect_for_ship(head_area.left_top) ==
-        false;
+            !io_layer->game_map.has_collision_effect_for_ship(head_area.left_top);
     const bool head2_in_main_sea =
-        io_layer->game_map.has_collison_effect_for_ship(
-            head_area.right_bottom) == false;
+            !io_layer->game_map.has_collision_effect_for_ship(
+                    head_area.right_bottom);
     const int in_main_sea_count = head1_in_main_sea + head2_in_main_sea;
 
     if (in_main_sea_count != 1) {
@@ -200,13 +193,15 @@ public:
     const auto [next_pos, next_dir] = Ship::calc_rot_action(
         ship.pos, ship.direction, rot_dir.value() == Direction::CLOCKWISE);
 
-    auto new_ship_area = ship.calc_ship_area(next_pos, next_dir);
+    auto new_ship_area = Ship::calc_ship_area(next_pos, next_dir);
 
     const auto new_ship_area_points = new_ship_area.to_points();
 
+    auto is_barrier_for_ship = get_is_barrier_lambda(ship.id, true, true);
+
     if (std::any_of(new_ship_area_points.begin(), new_ship_area_points.end(),
-                    [this](const Point &p) {
-                      return io_layer->game_map.is_barrier_for_ship(p);
+                    [ &is_barrier_for_ship](const Point &p) {
+                      return is_barrier_for_ship(p);
                     })) {
       log_info("ship[%d] half_main_sea_avoid failed", ship.id);
       return;
@@ -226,7 +221,7 @@ public:
     ship.next_command_before_collison = next_command;
   }
 
-  void ouput_command(Ship &ship) {
+  void output_command(Ship &ship) {
     if (!ship.normal_status()) {
       return;
     }
@@ -251,7 +246,7 @@ public:
 
     drop_path_point_if_reach(ship);
 
-    if (ship.path.size() == 0) {
+    if (ship.path.empty()) {
       switch (ship.fsm) {
       case ShipFSM::GO_TO_BERTH: {
         ship.fsm = ShipFSM::GO_TO_DELIVERY;
@@ -271,9 +266,9 @@ public:
 
     auto ship_cur_area = ship.get_ship_area();
 
-    while (ship.path.size() > 0) {
+    while (!ship.path.empty()) {
       Point p = ship.path.back();
-      if (ship_cur_area.contain(p) == false) {
+      if (!ship_cur_area.contain(p)) {
         break;
       } else {
         log_info("ship[%d] cur_area reach, pop path.back(%d,%d)", ship.id,
@@ -287,9 +282,9 @@ public:
       return;
     }
 
-    while (ship.path.size() > 0) {
+    while (!ship.path.empty()) {
       Point p = ship.path.back();
-      if (ship_next_area.value().contain(p) == false) {
+      if (!ship_next_area.value().contain(p)) {
         break;
       } else {
         log_info("ship[%d] next_area reach pop path.back(%d,%d)", ship.id,

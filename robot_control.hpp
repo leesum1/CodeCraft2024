@@ -52,7 +52,7 @@ public:
       };
 
       // 找不到路径
-      if (robot_shop_come_from.path_exist(goods.first) == false) {
+      if (!robot_shop_come_from.path_exist(goods.first)) {
         continue;
       }
 
@@ -75,14 +75,21 @@ public:
       }
       // 货物还剩多久消失
       int goods_remin_time =
-          std::max(200, goods.second.end_cycle - io_layer.cur_cycle);
+          std::max(300, goods.second.end_cycle - io_layer.cur_cycle);
 
       // 从货物到港口的最短路径
       const auto to_berth_path_cost =
           io_layer.get_minimum_berth_cost(goods.first);
 
       // 使用贪心
-      float cur_weight = 1.0 / (to_goods_path_cost.value());
+      // float cur_weight = static_cast<float>(goods.second.money) /
+      //                    (to_goods_path_cost.value() + goods_remin_time);
+      float cur_weight = static_cast<float>(goods.second.money);
+      // if (cur_weight > max_weight_hi) {
+      //   max_weight_hi = cur_weight;
+      //   goods_final_hi = goods.second;
+      //   founded = true;
+      // }
 
       // 分别找到高于平均值和低于平均值的货物
       if (goods.second.money >= (io_layer.total_goods_avg_money())) {
@@ -137,11 +144,11 @@ public:
 
       if (goods.second.status != GoodsStatus::Normal) {
         continue;
-      };
+      }
 
       // 找不到路径
-      if (io_layer.berths_come_from_for_robot[berth_id].path_exist(
-              goods.first) == false) {
+      if (!io_layer.berths_come_from_for_robot[berth_id].path_exist(
+              goods.first)) {
         continue;
       }
 
@@ -189,17 +196,19 @@ public:
       // /** 策略1**/
 
       /** 策略2*/
-      const float to_goods_one = 6400.0 / (to_goods_path_cost.value() + 1);
-      const float to_berth_one =
-          to_berth_path_cost.second / static_cast<float>(max_path_size);
-      float goods_remin_time_one =
-          4200000.0 / (goods_remin_time * goods_remin_time + 1);
 
-      if (to_goods_path_cost.value() > 71) {
-        goods_remin_time_one = goods_remin_time_one / 2;
-      }
+      // const float to_goods_one = 6400.0 / (to_goods_path_cost.value() + 1);
+      // const float to_berth_one =
+      //     to_berth_path_cost.second / static_cast<float>(max_path_size);
+      // float goods_remin_time_one =
+      //     4200000.0 / (goods_remin_time * goods_remin_time + 1);
 
-      float cur_weight = to_goods_one + goods_remin_time_one;
+      // if (to_goods_path_cost.value() > 71) {
+      //   goods_remin_time_one = goods_remin_time_one / 2;
+      // }
+
+      // float cur_weight = to_goods_one + goods_remin_time_one;
+
       /** 策略2*/
 
       /** 策略3*/
@@ -211,26 +220,35 @@ public:
       //**策略4*/
       // float cur_weight = 1.0 / (to_goods_path_cost.value());
 
-      if (io_layer.final_time) {
-        cur_weight =
-            1.0 / (to_goods_path_cost.value() + to_berth_path_cost.second);
+      // if (io_layer.final_time) {
+      //   cur_weight =
+      //       1.0 / (to_goods_path_cost.value() + to_berth_path_cost.second);
+      // }
+
+      float cur_weight =
+          static_cast<float>(goods.second.money) / (to_goods_path_cost.value());
+
+      if (cur_weight > max_weight_hi) {
+        max_weight_hi = cur_weight;
+        goods_final_hi = goods.second;
+        founded = true;
       }
 
-      // 分别找到高于平均值和低于平均值的货物
-      if (goods.second.money >= (io_layer.total_goods_avg_money())) {
-        // if (true) {
-        if (cur_weight > max_weight_hi) {
-          max_weight_hi = cur_weight;
-          goods_final_hi = goods.second;
-          founded = true;
-        }
-      } else {
-        if (cur_weight > max_weight_lo) {
-          max_weight_lo = cur_weight;
-          goods_final_lo = goods.second;
-          founded = true;
-        }
-      }
+      // // 分别找到高于平均值和低于平均值的货物
+      // if (goods.second.money >= (io_layer.total_goods_avg_money())) {
+      //   // if (true) {
+      //   if (cur_weight > max_weight_hi) {
+      //     max_weight_hi = cur_weight;
+      //     goods_final_hi = goods.second;
+      //     founded = true;
+      //   }
+      // } else {
+      //   if (cur_weight > max_weight_lo) {
+      //     max_weight_lo = cur_weight;
+      //     goods_final_lo = goods.second;
+      //     founded = true;
+      //   }
+      // }
     }
 
     const auto &goods_final =

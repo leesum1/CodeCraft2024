@@ -24,6 +24,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 class IoLayerNew {
 
@@ -592,6 +593,30 @@ public:
     }
 
     /**
+     * @brief 检测点是否在港口停泊区域
+     *
+     * @param p
+     * @return std::optional<int> 港口id
+     */
+    std::optional<int> in_dock_area(const Point &p) {
+        for (auto &berth: berths) {
+            if (berth.in_dock_area(p)) {
+                return berth.id;
+            }
+        }
+        return std::nullopt;
+    }
+
+    std::optional<int> in_delivery_point_area(const Point &p) {
+        for (int i = 0; i < delivery_points.size(); i++) {
+            if (delivery_points[i] == p) {
+                return i;
+            }
+        }
+        return std::nullopt;
+    }
+
+    /**
      * @brief 检测点是否在机器人商店区域
      *
      * @param p
@@ -756,7 +781,7 @@ public:
             ships[i].pos.y = y;
             ships[i].direction = Direction::int_to_direction(direction);
             ships[i].status = status;
-            log_info("ship[%d](%d,%d),direction:%d", i, x, y, direction);
+            log_info("ship[%d](%d,%d),direction:%d,status:%d,cur_capacity:%d", i, x, y, direction, status, goods_num);
         }
 
         char okk[10];

@@ -142,53 +142,52 @@ public:
             // 更新货物信息
             goods_list_cycle();
 
-            if (zhen < 4) {
+            if (zhen < 20) {
                 io_layer.robot_lbot(io_layer.robot_shops.front());
             }
             if (zhen == 1) {
                 io_layer.ship_lboat(io_layer.ship_shops.back());
             }
 
-            if (zhen == 100) {
-                io_layer.ship_lboat(io_layer.ship_shops.front());
-            }
 
-            if (zhen == 1000) {
-                io_layer.ship_lboat(io_layer.ship_shops.back());
-            }
+//            for (auto &ship: io_layer.ships) {
+//                ship.clear_flags();
+//            }
+//            for (auto &ship: io_layer.ships) {
+////                log_assert(ship.cur_capacity == ship.goods_list.size(),
+////                           "ship.cur_capacity:%d ship.goods_list.size():%d",
+////                           ship.cur_capacity, ship.goods_list.size());
+//                ship_control.ship_control_fsm(ship);
+//                ship_control.drop_path_point_if_reach(ship);
+//                ship_control.ship_loading(ship);
+//                ship_control.go_to_berth(ship);
+//                ship_control.go_to_deliver(ship);
+//                ship_control.update_next_pos(ship);
+//                ship_control.output_command(ship);
+//            }
 
-            for (auto &ship: io_layer.ships) {
-                ship.clear_flags();
-            }
-            for (auto &ship: io_layer.ships) {
-                ship_control.go_to_berth(ship);
-                ship_control.go_to_deliver(ship);
-                ship_control.update_next_pos(ship);
-                ship_control.output_command(ship);
-                ship_control.ship_control_fsm(ship);
-            }
-
-            // for (auto &ship : io_layer.ships) {
-            //   if (ship.status == 0) {
-            //     if (first_check_ship_rot) {
-            //       first_check_ship_rot = false;
-            //     } else {
-            //       log_assert(ship.pos == check_ship_rot.first,
-            //                  "ship(%d,%d) check_ship_rot(%d,%d)", P_ARG(ship.pos),
-            //                  P_ARG(check_ship_rot.first));
-            //       log_assert(ship.direction == check_ship_rot.second,
-            //                  "ship direction:%d check_ship_rot direction:%d",
-            //                  ship.direction, check_ship_rot.second);
-            //     }
-            //     io_layer.ship_rot(ship.id, 0);
-            //     check_ship_rot = Ship::calc_rot_action(ship.pos, ship.direction,
-            //     1);
-            //   }
-            // }
+//            for (auto &ship: io_layer.ships) {
+//                if (ship.status == 0) {
+//                    if (first_check_ship_rot) {
+//                        first_check_ship_rot = false;
+//                    } else {
+//                        log_assert(ship.pos == check_ship_rot.first,
+//                                   "ship(%d,%d) check_ship_rot(%d,%d)", P_ARG(ship.pos),
+//                                   P_ARG(check_ship_rot.first));
+//                        log_assert(ship.direction == check_ship_rot.second,
+//                                   "ship direction:%d check_ship_rot direction:%d",
+//                                   ship.direction, check_ship_rot.second);
+//                    }
+//                    io_layer.ship_rot(ship.id, 0);
+//                    check_ship_rot = Ship::calc_rot_action(ship.pos, ship.direction,
+//                                                           1);
+//                }
+//            }
 
             for (auto &robot: io_layer.robots) {
                 robot.clear_flags();
             }
+
 
             auto start = std::chrono::high_resolution_clock::now();
             for (auto &robot: io_layer.robots) {
@@ -216,6 +215,27 @@ public:
                 RobotControl::robots_move(robot, io_layer);
                 RobotControl::robots_pull_cycle(robot, io_layer);
             }
+
+            for (auto &ship: io_layer.ships) {
+                ship.clear_flags();
+            }
+            for (auto &ship: io_layer.ships) {
+                ship_control.sell_goods(ship);
+                log_assert(ship.cur_capacity == ship.goods_list.size(),
+                           "ship.cur_capacity:%d ship.goods_list.size():%d",
+                           ship.cur_capacity, ship.goods_list.size());
+                log_info("ship.cur_capacity:%d ship.goods_list.size():%d",
+                         ship.cur_capacity, ship.goods_list.size());
+                ship_control.ship_control_fsm(ship);
+                ship_control.drop_path_point_if_reach(ship);
+                ship_control.ship_loading(ship);
+                ship_control.go_to_berth(ship);
+                ship_control.go_to_deliver(ship);
+                ship_control.update_next_pos(ship);
+                ship_control.output_command(ship);
+            }
+
+
             io_layer.output_cycle();
             log_info("map_goods_list size:%d", io_layer.map_goods_list.size());
             io_layer.print_goods_info();

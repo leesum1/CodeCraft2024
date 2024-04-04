@@ -6,6 +6,7 @@
 #include <ios>
 #include <optional>
 #include <string>
+#include <iostream>
 
 static std::optional<std::ofstream> log_file;
 static int log_level;
@@ -13,42 +14,44 @@ static std::array<std::string, 5> log_level_str = {"INFO", "WARN", "DEBUG",
                                                    "TRACE", "FATAL"};
 
 void log_init(const char *log_path, int level) {
-  log_file.emplace(log_path, std::ios::out | std::ios::trunc);
-  log_level = level;
+    log_file.emplace(log_path, std::ios::out | std::ios::trunc);
+    log_level = level;
 }
 
 void log_raw(const char *fmt, ...) {
-  if (!log_file.has_value()) {
-    return;
-  }
-  static char buf[1000];
+    static char buf[1000];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
 
-  va_list args;
-  va_start(args, fmt);
-  vsnprintf(buf, sizeof(buf), fmt, args);
-  va_end(args);
+    if (!log_file.has_value()) {
+        std::cerr << buf;
+        return;
+    }
 
-  log_file.value() << buf;
-  log_file.value().flush();
+
+    log_file.value() << buf;
+    log_file.value().flush();
 }
 
 void log_write(int level, const char *file, int line, const char *fmt, ...) {
-  if (level > log_level || !log_file.has_value()) {
-    return;
-  }
-  static char buf[1000];
+    if (level > log_level || !log_file.has_value()) {
+        return;
+    }
+    static char buf[1000];
 
-  std::time_t t = std::time(nullptr);
-  char time_buf[20];
-  std::strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S",
-                std::localtime(&t));
+    std::time_t t = std::time(nullptr);
+    char time_buf[100];
+    std::strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S",
+                  std::localtime(&t));
 
-  va_list args;
-  va_start(args, fmt);
-  vsnprintf(buf, sizeof(buf), fmt, args);
-  va_end(args);
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
 
-  log_file.value() << time_buf << " " << log_level_str[level] << " " << file
-                   << ":" << line << " " << buf << std::endl;
-  log_file.value().flush();
+    log_file.value() << time_buf << " " << log_level_str[level] << " " << file
+                     << ":" << line << " " << buf << std::endl;
+    log_file.value().flush();
 }

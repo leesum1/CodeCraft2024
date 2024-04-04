@@ -234,16 +234,22 @@ public:
      * @param ship
      */
     void go_to_deliver(Ship &ship) {
-        if (!ship.normal_status()) {
-            return;
-        }
+
         if (ship.fsm != ShipFSM::GO_TO_DELIVERY) {
             return;
         }
 
-        if (!ship.path.empty()) {
+        if (!(ship.normal_status() || ship.load_status())) {
+            log_trace("ship[%d] go_to_deliver, not normal or not load,status:%d", ship.id, ship.status);
             return;
         }
+
+        if (!ship.path.empty()) {
+            log_trace("ship[%d] go_to_deliver, path not empty,size:%d", ship.id, ship.path.size());
+            return;
+        }
+
+        log_trace("ship[%d] go_to_deliver", ship.id);
 
         auto best_deliver_id = get_best_deliver_id(ship);
 
@@ -261,7 +267,6 @@ public:
 
         ship.path = deliver_path;
         ship.set_target_delivery_id(best_deliver_id);
-        io_layer->berths[best_deliver_id].occupied_ship_id = ship.id;
         drop_path_point_if_reach(ship);
         ship.update_ship_next_pos(get_is_barrier_for_ship_lambda(ship.id, true, true));
     }
@@ -331,15 +336,44 @@ public:
         ship.next_command_before_collison = next_command;
     }
 
+
+    void sell_goods(Ship &ship) {
+
+        auto deliver_id = io_layer->in_delivery_point_area(ship.pos);
+        if (deliver_id.has_value() && deliver_id.value() == ship.target_delivery_id) {
+            for (auto &goods: ship.goods_list) {
+                io_layer->statistic.selled_goods_list.emplace_back(goods);
+            }
+            log_trace("ship[%d] sell goods to deliver[%d], nums:%d,val:%d ", ship.id, deliver_id.value(),
+                      ship.goods_list.size(), ship.cur_value());
+            ship.goods_list.clear();
+        }
+    }
+
     /**
      * @brief 更新船下一个位置
      * @param ship
      */
     void update_next_pos(Ship &ship) {
-        if (!ship.path.empty()) {
+        if (ship.path.size() > 1) {
+            log_info("ship[%d],path size >1 :%d", ship.id, ship.path.size());
             ship.update_ship_next_pos(get_is_barrier_for_ship_lambda(ship.id, true, true));
+            half_main_sea_avoid(ship);
+        } else if (ship.path.size() == 1) {
+            log_info("ship[%d],path size == 1 :%d", ship.id, ship.path.size());
+            const auto target_point = ship.path.back();
+            auto ship_area = ship.get_ship_area();
+            if (ship_area.contain(target_point)) {
+                if (target_point == ship.pos) {
+                    ship.path.pop_back();
+                } else {
+                    go_to_point_exactly(ship, ship.path.back());
+                }
+            } else {
+                ship.update_ship_next_pos(get_is_barrier_for_ship_lambda(ship.id, true, true));
+//                half_main_sea_avoid(ship);
+            }
         }
-        half_main_sea_avoid(ship);
     }
 
     /**
@@ -347,7 +381,8 @@ public:
      * @param ship
      */
     void output_command(Ship &ship) {
-        if (!ship.normal_status()) {
+        if (ship.recover_status()) {
+            log_info("ship[%d] recover status", ship.id);
             return;
         }
         switch (ship.get_next_command()) {
@@ -366,21 +401,42 @@ public:
                 io_layer->ship_rot(ship.id, 1);
                 break;
             }
+            case ShipCommand::BERTH: {
+                io_layer->ship_berth(ship.id);
+                break;
+            }
+            case ShipCommand::DEPT: {
+                io_layer->ship_dept(ship.id);
+                break;
+            }
         }
-
-        drop_path_point_if_reach(ship);
     }
 
     void ship_control_fsm(Ship &ship) {
-        if (!ship.normal_status()) {
+        if (ship.recover_status()) {
             return;
         }
-        if (ship.path.empty()) {
+        auto berth_id = io_layer->in_dock_area(ship.pos);
+        const bool should_go_to_berth_and_loading = berth_id.has_value() && berth_id.value() == ship.target_berth_id;
+
+        if (ship.path.empty() || should_go_to_berth_and_loading) {
             switch (ship.fsm) {
+                case ShipFSM::FIRST_BORN: {
+                    ship.fsm = ShipFSM::GO_TO_BERTH;
+                    log_trace("ship[%d] fsm change to GO_TO_BERTH", ship.id);
+                    break;
+                }
                 case ShipFSM::GO_TO_BERTH: {
-                    ship.fsm = ShipFSM::GO_TO_DELIVERY;
-                    log_trace("ship[%d] fsm change to GO_TO_DELIVERY", ship.id);
-                    io_layer->berths[ship.target_berth_id].occupied_ship_id = std::nullopt;
+                    // 当位于泊位附近时,应该停靠到泊位中
+                    if (should_go_to_berth_and_loading) {
+                        ship.fsm = ShipFSM::LOADING;
+                        ship.next_command_before_collison = ShipCommand::BERTH;
+                        ship.path.clear();
+                        log_trace("ship[%d] fsm change to LOADING", ship.id);
+                    } else {
+                        ship.fsm = ShipFSM::GO_TO_DELIVERY;
+                        log_trace("ship[%d] fsm change to GO_TO_DELIVERY", ship.id);
+                    }
                     break;
                 }
                 case ShipFSM::GO_TO_DELIVERY: {
@@ -388,6 +444,127 @@ public:
                     log_trace("ship[%d] fsm change to GO_TO_BERTH", ship.id);
                     break;
                 }
+                case ShipFSM::LOADING: {
+
+                }
+                    break;
+            }
+        }
+    }
+
+    void ship_loading(Ship &ship) {
+        if (ship.fsm != ShipFSM::LOADING) {
+            return;
+        }
+        if (!ship.load_status()) {
+            return;
+        }
+        log_assert(ship.path.empty(), "ship[%d] path not empty", ship.id);
+
+        auto &cur_berth = io_layer->berths[ship.target_berth_id];
+
+        if (ship.full()) {
+            ship.fsm = ShipFSM::GO_TO_DELIVERY;
+            log_trace("ship[%d] full, change to GO_TO_DELIVERY", ship.id);
+            return;
+        }
+        if (cur_berth.is_empty()) {
+            ship.fsm = ShipFSM::GO_TO_DELIVERY;
+            log_trace("cur_berth is empty, ship[%d] change to GO_TO_DELIVERY", ship.id);
+            return;
+        }
+
+        log_trace("ship[%d] loading in berth[%d] ", ship.id, cur_berth.id);
+        const int load_count = std::min({ship.remain_capacity(), cur_berth.loading_speed,
+                                         static_cast<int>(cur_berth.goods_list.size())});
+        for (int i = 0; i < load_count; i++) {
+            const auto goods = cur_berth.goods_list.front();
+            log_trace("ship[%d] load goods(%d,%d)", ship.id, goods.pos.x, goods.pos.y);
+            ship.load(goods);
+            cur_berth.goods_list.pop_front();
+        }
+
+    }
+
+    /**
+     * @brief 船的行为控制,让轮船中心点准确到达某个点，该点必须在轮船当前的区域内
+     * @param ship
+     * @param p 目标点
+     */
+    void go_to_point_exactly(Ship &ship, const Point &p) {
+        auto ship_area = ship.get_ship_area();
+        log_assert(ship_area.contain(p), "ship_area:%s, p(%d,%d)", ship_area.to_string().c_str(),
+                   P_ARG(p));
+        const auto point_id = ship.get_point_id_in_ship_area(p);
+
+        log_assert(point_id != 3, "id is 3, ship_area:%s, p(%d,%d)", ship_area.to_string().c_str(),
+                   P_ARG(p));
+        const bool ship_can_move = ship.can_move(get_is_barrier_for_ship_lambda(ship.id, false, false));
+        const bool ship_can_rot_clockwise = ship.can_rotate(get_is_barrier_for_ship_lambda(ship.id, false, false),
+                                                            true);
+        const bool ship_can_rot_counterclockwise = ship.can_rotate(
+                get_is_barrier_for_ship_lambda(ship.id, false, false), false);
+
+        auto update_ship_next_pos = [&ship](const Point &p, Direction::Direction direction, ShipCommand command
+        ) {
+            ship.next_pos_before_collison = p;
+            ship.next_command_before_collison = command;
+            ship.next_direction_before_collison = direction;
+        };
+
+
+        switch (point_id) {
+            case 1: {
+                if (ship_can_move) {
+                    update_ship_next_pos(Direction::move(ship.pos, ship.direction),
+                                         ship.direction, ShipCommand::GO);
+                } else if (ship_can_rot_counterclockwise) {
+                    const auto [next_pos, next_dir] = Ship::calc_rot_action(
+                            ship.pos, ship.direction, false);
+                    update_ship_next_pos(next_pos, next_dir, ShipCommand::ROTATE_COUNTERCLOCKWISE);
+                } else {
+                    log_fatal("ship[%d] can not move or rotate", ship.id);
+                }
+                break;
+            }
+            case 2: {
+                if (ship_can_rot_clockwise) {
+                    const auto [next_pos, next_dir] = Ship::calc_rot_action(
+                            ship.pos, ship.direction, true);
+                    update_ship_next_pos(next_pos, next_dir, ShipCommand::ROTATE_CLOCKWISE);
+                } else if (ship_can_move) {
+                    update_ship_next_pos(Direction::move(ship.pos, ship.direction),
+                                         ship.direction, ShipCommand::GO);
+                } else {
+                    log_fatal("ship[%d] can not move or rotate", ship.id);
+                }
+                break;
+            }
+            case 4: {
+                if (ship_can_rot_counterclockwise) {
+                    const auto [next_pos, next_dir] = Ship::calc_rot_action(
+                            ship.pos, ship.direction, false);
+                    update_ship_next_pos(next_pos, next_dir, ShipCommand::ROTATE_COUNTERCLOCKWISE);
+                } else {
+                    log_fatal("ship[%d] can not move", ship.id);
+                }
+                break;
+            }
+            case 5: {
+                if (ship_can_rot_clockwise) {
+                    const auto [next_pos, next_dir] = Ship::calc_rot_action(
+                            ship.pos, ship.direction, true);
+                    update_ship_next_pos(next_pos, next_dir, ShipCommand::ROTATE_CLOCKWISE);
+                } else if (ship_can_move) {
+                    update_ship_next_pos(Direction::move(ship.pos, ship.direction),
+                                         ship.direction, ShipCommand::GO);
+                } else {
+                    log_fatal("ship[%d] can not move or rotate", ship.id);
+                }
+                break;
+            }
+            default: {
+                log_fatal("unknown point_id:%d", point_id);
             }
         }
     }
@@ -400,28 +577,12 @@ public:
 
         auto ship_cur_area = ship.get_ship_area();
 
-        while (!ship.path.empty()) {
+        while (ship.path.size() > 1) {
             Point p = ship.path.back();
             if (!ship_cur_area.contain(p)) {
                 break;
             } else {
                 log_info("ship[%d] cur_area reach, pop path.back(%d,%d)", ship.id,
-                         P_ARG(p));
-                ship.path.pop_back();
-            }
-        }
-
-        auto ship_next_area = ship.get_ship_next_area();
-        if (!ship_next_area.has_value()) {
-            return;
-        }
-
-        while (!ship.path.empty()) {
-            Point p = ship.path.back();
-            if (!ship_next_area.value().contain(p)) {
-                break;
-            } else {
-                log_info("ship[%d] next_area reach pop path.back(%d,%d)", ship.id,
                          P_ARG(p));
                 ship.path.pop_back();
             }

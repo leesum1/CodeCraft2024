@@ -10,6 +10,8 @@
 #include <utility>
 
 enum class ShipFSM {
+    FIRST_BORN,     // 第一次出生
+    LOADING,       // 装货
     GO_TO_BERTH,    // 前往泊位
     GO_TO_DELIVERY, // 前往交货点
 };
@@ -19,7 +21,8 @@ enum class ShipCommand {
     GO,                      // 前进
     ROTATE_CLOCKWISE,        // 顺时针旋转
     ROTATE_COUNTERCLOCKWISE, // 逆时针旋转
-
+    BERTH,                   // 停泊
+    DEPT                    // 重置到主航道上
 };
 
 class Ship {
@@ -27,6 +30,7 @@ class Ship {
 public:
     int id;
     int capacity; // 最大载货量
+    int cur_capacity = 0; // 当前载货量
     // 正常行驶状态（状态0）恢复状态（状态1）装载状态（状态2)
     int status;
     int berth_id;
@@ -50,8 +54,108 @@ public:
     ShipCommand next_command_after_collison = ShipCommand::IDLE;
 
     // 一些状态位置
-    int cur_capacity = 0; // 当前载重量
-    int cur_value = 0;    // 当前价值
+
+    std::vector<Goods> goods_list{}; // 货物列表
+    /**
+     * @brief 判断船是否可以移动到下一个位置
+     *
+     * @param is_barrier
+     * @return true
+     * @return false
+     */
+    bool can_move(std::function<bool(const Point &p)> is_barrier) const {
+        const auto next_pos = Direction::move(this->pos, this->direction);
+        auto next_ship_area = Ship::calc_ship_area(next_pos, this->direction);
+
+        std::vector<Point> next_ship_points = next_ship_area.to_points();
+        bool will_collision =
+                std::any_of(next_ship_points.begin(), next_ship_points.end(),
+                            [&](const Point &p) { return is_barrier(p); });
+        return !will_collision;
+    }
+
+    /**
+     * @brief 判断船是否可以旋转到下一个位置
+     *
+     * @param is_barrier
+     * @param clockwise_direction
+     * @return true
+     * @return false
+     */
+    bool can_rotate(std::function<bool(const Point &p)> is_barrier, bool clockwise_direction) const {
+        const auto [next_pos, next_dir] =
+                Ship::calc_rot_action(this->pos, this->direction, clockwise_direction);
+        auto next_ship_area = Ship::calc_ship_area(next_pos, next_dir);
+
+        std::vector<Point> next_ship_points = next_ship_area.to_points();
+        bool will_collision =
+                std::any_of(next_ship_points.begin(), next_ship_points.end(),
+                            [&](const Point &p) { return is_barrier(p); });
+        return !will_collision;
+    }
+
+    /**
+     * @brief 获取船位置中点的 id 编号
+     * @param p
+     * @return
+     */
+    int get_point_id_in_ship_area(const Point &p) const {
+        auto ship_area = this->get_ship_area();
+        log_assert(ship_area.contain(p), "ship_area:%s not contain point(%d,%d)", ship_area.to_string().c_str(),
+                   P_ARG(p));
+        struct id_key {
+            Direction::Direction dir;
+            int x_diff;
+            int y_diff;
+
+            bool operator==(const id_key &other) const {
+                return dir == other.dir && x_diff == other.x_diff && y_diff == other.y_diff;
+            }
+        };
+        struct id_key_hash {
+            std::size_t operator()(const id_key &k) const {
+                return ((std::hash<int>()(k.dir)
+                         ^ (std::hash<int>()(k.x_diff) << 1)) >> 1)
+                       ^ (std::hash<int>()(k.y_diff) << 1);
+            }
+        };
+        static const std::unordered_map<id_key, int, id_key_hash> id_map = {
+                {{Direction::RIGHT, 0,  0},  0},
+                {{Direction::RIGHT, 0,  1},  1},
+                {{Direction::RIGHT, 0,  2},  2},
+                {{Direction::RIGHT, 1,  0},  3},
+                {{Direction::RIGHT, 1,  1},  4},
+                {{Direction::RIGHT, 1,  2},  5},
+
+                {{Direction::LEFT,  0,  0},  0},
+                {{Direction::LEFT,  0,  -1}, 1},
+                {{Direction::LEFT,  0,  -2}, 2},
+                {{Direction::LEFT,  -1, 0},  3},
+                {{Direction::LEFT,  -1, -1}, 4},
+                {{Direction::LEFT,  -1, -2}, 5},
+
+                {{Direction::UP,    0,  0},  0},
+                {{Direction::UP,    -1, 0},  1},
+                {{Direction::UP,    -2, 0},  2},
+                {{Direction::UP,    0,  1},  3},
+                {{Direction::UP,    -1, 1},  4},
+                {{Direction::UP,    -2, 1},  5},
+
+                {{Direction::DOWN,  0,  0},  0},
+                {{Direction::DOWN,  1,  0},  1},
+                {{Direction::DOWN,  2,  0},  2},
+                {{Direction::DOWN,  0,  -1}, 3},
+                {{Direction::DOWN,  1,  -1}, 4},
+                {{Direction::DOWN,  2,  -1}, 5},
+        };
+        const int x_diff = p.x - pos.x;
+        const int y_diff = p.y - pos.y;
+        const auto dir = this->direction;
+        const auto iter = id_map.find({dir, x_diff, y_diff});
+
+        log_assert(iter != id_map.end(), "id_map not contain key(%d,%d,%d)", dir, x_diff, y_diff);
+        return iter->second;
+    }
 
     void set_target_berth_id(int target_berth_id) {
         this->target_berth_id = target_berth_id;
@@ -258,13 +362,18 @@ public:
         }
     }
 
-    int capacity_percent() const { return this->cur_capacity * 100 / this->capacity; }
+    int capacity_percent() const { return this->goods_list.size() * 100 / this->capacity; }
+
+    int cur_value() const {
+        return std::accumulate(this->goods_list.begin(), this->goods_list.end(), 0,
+                               [](int sum, const Goods &goods) { return sum + goods.money; });
+    }
 
     bool normal_status() const { return this->status == 0; }
 
-    bool recover_status() { return this->status == 1; }
+    bool recover_status() const { return this->status == 1; }
 
-    bool load_status() { return this->status == 2; }
+    bool load_status() const { return this->status == 2; }
 
     /**
      * @brief 得到船头的位置
@@ -422,31 +531,23 @@ public:
         log_assert(false, "calc_rot_action error");
     }
 
-    void load(int value) {
-        log_assert(value > 0 && value <= 200, "value is not positive, %d", value);
-        this->cur_capacity++;
-        this->cur_value += value;
+    void load(const Goods &goods) {
+        this->goods_list.emplace_back(goods);
     }
 
     void unload() {
-        log_assert(this->cur_capacity >= 0, "cur_capacity is not positive, %d",
-                   this->cur_capacity);
-        log_assert(this->cur_value >= 0, "cur_value is not positive %d",
-                   this->cur_value);
-
         log_assert(this->berth_id == -1, "berth_id is not -1, %d", this->berth_id);
 
         log_trace("Ship %d unload, cur_capacity: %d, cur_value: %d", this->id,
-                  this->capacity_percent(), this->cur_value);
-        this->cur_capacity = 0;
-        this->cur_value = 0;
+                  this->capacity_percent(), this->cur_value());
+        this->goods_list.clear();
     }
 
-    bool full() const { return this->cur_capacity >= this->capacity; }
+    bool full() const { return this->goods_list.size() >= this->capacity; }
 
-    bool empty() const { return this->cur_capacity == 0; }
+    bool empty() const { return this->goods_list.empty(); }
 
-    int remain_capacity() const { return this->capacity - this->cur_capacity; }
+    int remain_capacity() const { return this->capacity - this->goods_list.size(); }
 
     explicit Ship(int id, int cur_capacity, int max_capacity, const Point &pos,
                   Direction::Direction direction, int status)
@@ -458,7 +559,5 @@ public:
         this->capacity = 0;
         this->status = 0;
         this->berth_id = -1;
-        this->cur_capacity = 0;
-        this->cur_value = 0;
     }
 };

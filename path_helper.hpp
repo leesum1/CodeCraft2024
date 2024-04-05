@@ -12,13 +12,12 @@
 #include <vector>
 
 class PATHHelper {
-
 public:
   static std::vector<Point>
-  bfs_path_v1(const Point &start, std::function<bool(Point)> goal,
-              std::function<bool(Point)> is_barrier,
-              std::function<std::vector<Point>(Point)> neighbors, int max_level,
-              bool &founded) {
+  bfs_path_v1(const Point& start, const std::function<bool(Point)>& goal,
+              const std::function<bool(Point)>& is_barrier,
+              const std::function<std::vector<Point>(Point)>& neighbors, int max_level,
+              bool& founded) {
     std::queue<Point> q;
     q.push(start);
     static bool visited[200][200];
@@ -31,7 +30,7 @@ public:
 
     if (goal(start)) {
       founded = false;
-      return std::vector<Point>();
+      return {};
     }
 
     int search_level = 0;
@@ -45,7 +44,7 @@ public:
           goto bfs_path_v1_end;
         }
         q.pop();
-        for (auto &next : neighbors(cur)) {
+        for (auto& next : neighbors(cur)) {
           if (is_barrier(next) || visited[next.x][next.y]) {
             continue;
           }
@@ -66,16 +65,16 @@ public:
         cur = come_from[cur.x][cur.y];
       }
       return path;
-    } else {
-      return std::vector<Point>();
+    }
+    else {
+      return {};
     }
   }
 
   static std::unordered_map<Point, PointCost>
-  cut_path(const Point &start, std::function<bool(Point)> is_barrier,
+  cut_path(const Point& start, std::function<bool(Point)> is_barrier,
            std::function<std::vector<Point>(Point)> neighbors,
-           std::vector<Point> &cur_path, int cut_step, bool &success) {
-
+           std::vector<Point>& cur_path, int cut_step, bool& success) {
     log_assert(cut_step > 0, "cut_step should be greater than 0");
     log_assert(cur_path.size() > 0, "cur_path should not be empty");
     success = false;
@@ -85,13 +84,12 @@ public:
     }
 
     auto come_from = bfs_search(
-        start, [&Goal](Point p) { return p == Goal; }, is_barrier, neighbors,
-        PATHHelper::default_cost, 30);
+      start, [&Goal](Point p) { return p == Goal; }, is_barrier, neighbors,
+      PATHHelper::default_cost, 30);
     bool founded = false;
     auto path = get_path(start, Goal, come_from, founded);
 
     if (founded) {
-
       // // 在这里才能清空砍断的路径
       // // 1. 如果路径长度大于 skip_size ,则剪切掉后面的 skip_size 个点
       // // 2. 如果路径长度小于 skip_size ,则清空路径
@@ -116,7 +114,8 @@ public:
           }
           cur_path.pop_back();
         }
-      } else {
+      }
+      else {
         cur_path.clear();
       }
 
@@ -130,11 +129,10 @@ public:
   }
 
   static std::unordered_map<Point, PointCost>
-  astar_search(const Point &start, const Point &goal,
+  astar_search(const Point& start, const Point& goal,
                std::function<bool(Point)> is_barrier,
                std::function<int(Point)> heuristic,
                std::function<std::vector<Point>(Point)> neighbors) {
-
     if (is_barrier(goal)) {
       log_fatal("goal is barrier");
       assert(false);
@@ -144,7 +142,7 @@ public:
     std::unordered_map<Point, PointCost> come_from;
     std::unordered_map<Point, int> cost_so_far;
 
-    q.push(PointCost(start, 0));
+    q.emplace(start, 0);
     come_from[start] = PointCost(start, 0);
     cost_so_far[start] = 0;
 
@@ -156,7 +154,7 @@ public:
         return come_from;
       }
 
-      for (auto &next : neighbors(cur)) {
+      for (auto& next : neighbors(cur)) {
         int new_cost = cost_so_far.at(cur) + 1;
         // 1. 如果新的 cost 比之前的 cost 大，那么就不用更新了
         // 2. 如果是障碍物，那么也不用更新
@@ -166,11 +164,10 @@ public:
         }
 
         if (cost_so_far.find(next) == cost_so_far.end() ||
-            new_cost < cost_so_far.at(next)) {
-
+          new_cost < cost_so_far.at(next)) {
           int priority = new_cost + heuristic(next);
           cost_so_far.emplace(next, new_cost);
-          q.emplace(PointCost(next, priority));
+          q.emplace(next, priority);
           come_from.emplace(next, PointCost(cur, new_cost));
         }
       }
@@ -179,7 +176,7 @@ public:
     return come_from;
   }
 
-  static int default_cost(const Point &p) { return 1; }
+  static int default_cost(const Point& p) { return 1; }
 
   /**
    * @brief 一个用于 bfs 路径搜索的通用模板
@@ -193,11 +190,10 @@ public:
    * come_form,可以找到一个点的父节点和到达该点的代价
    */
   static std::unordered_map<Point, PointCost>
-  bfs_search(const Point &start, std::function<bool(Point)> goal,
-             std::function<bool(Point)> is_barrier,
-             std::function<std::vector<Point>(Point)> neighbors,
-             std::function<int(const Point &)> get_cost, int max_level) {
-
+  bfs_search(const Point& start, const std::function<bool(Point)>& goal,
+             const std::function<bool(Point)>& is_barrier,
+             const std::function<std::vector<Point>(Point)>& neighbors,
+             const std::function<int(const Point&)>& get_cost, int max_level) {
     std::queue<Point> q;
     std::unordered_map<Point, PointCost> come_from;
     int level = 0;
@@ -215,13 +211,13 @@ public:
         }
 
         q.pop();
-        for (auto &next : neighbors(cur)) {
+        for (auto& next : neighbors(cur)) {
           if (is_barrier(next) || come_from.find(next) != come_from.end()) {
             continue;
           }
           q.push(next);
           come_from[next] =
-              PointCost(cur, come_from[cur].cost + get_cost(next));
+            PointCost(cur, come_from[cur].cost + get_cost(next));
         }
       }
       level++;
@@ -242,17 +238,16 @@ public:
    * come_form,可以找到一个点的父节点和到达该点的代价
    */
   static std::unordered_map<Point, PointCost>
-  dijkstra_search(const Point &start, std::function<bool(const Point &)> goal,
-                  std::function<bool(const Point &)> is_barrier,
-                  std::function<std::vector<Point>(Point)> neighbors,
-                  std::function<int(const Point &)> get_cost, int max_level) {
-
+  dijkstra_search(const Point& start, const std::function<bool(const Point&)>& goal,
+                  const std::function<bool(const Point&)>& is_barrier,
+                  const std::function<std::vector<Point>(Point)>& neighbors,
+                  const std::function<int(const Point&)>& get_cost, int max_level) {
     std::priority_queue<PointCost> q;
 
     std::unordered_map<Point, PointCost> come_from;
     int level = 0;
 
-    q.push(PointCost(start, 0));
+    q.emplace(start, 0);
     come_from[start] = PointCost(start, 0);
 
     while (!q.empty() && level < max_level) {
@@ -265,14 +260,14 @@ public:
         }
 
         q.pop();
-        for (auto &next : neighbors(cur.pos)) {
+        for (auto& next : neighbors(cur.pos)) {
           if (is_barrier(next) || come_from.find(next) != come_from.end()) {
             continue;
           }
           const int next_cost = cur.cost + get_cost(next);
-          q.push(PointCost(next, next_cost)); // 当前节点以及到达当前节点的代价
+          q.emplace(next, next_cost); // 当前节点以及到达当前节点的代价
           come_from[next] =
-              PointCost(cur.pos, next_cost); // 父节点和当前节点的代价
+            PointCost(cur.pos, next_cost); // 父节点和当前节点的代价
         }
       }
       level++;
@@ -291,9 +286,9 @@ public:
    * @return std::vector<Point> 使用 vector 存储的路径
    */
   static std::vector<Point>
-  get_path(const Point &start, const Point &goal,
-           const std::unordered_map<Point, PointCost> &come_from,
-           bool &founded) {
+  get_path(const Point& start, const Point& goal,
+           const std::unordered_map<Point, PointCost>& come_from,
+           bool& founded) {
     std::vector<Point> path;
     founded = true;
 
@@ -326,9 +321,9 @@ public:
    * @return std::vector<Point> 使用 vector 存储的路径
    */
   static std::vector<Point>
-  get_path_reverse(const Point &start, const Point &goal,
-                   const std::unordered_map<Point, PointCost> &come_from,
-                   bool &founded) {
+  get_path_reverse(const Point& start, const Point& goal,
+                   const std::unordered_map<Point, PointCost>& come_from,
+                   bool& founded) {
     std::vector<Point> path;
     founded = true;
 
@@ -356,23 +351,23 @@ public:
   }
 
   static std::optional<Point>
-  get_bt_point(const Point &cur_pos,
-               const std::unordered_map<Point, PointCost> &come_from,
-               std::function<bool(const Point &)> is_barrier,
-               const std::vector<Point> &avoid_points) {
+  get_bt_point(const Point& cur_pos,
+               const std::unordered_map<Point, PointCost>& come_from,
+               const std::function<bool(const Point&)>& is_barrier,
+               const std::vector<Point>& avoid_points) {
     Point best_bt_point = invalid_point; // 最近的且不在同一个直线上的点
     Point fallback_bt_point = invalid_point; // 在同一直线上最远的点
     int best_bt_point_cost = INT_MAX;
     int fallback_bt_point_cost = -1;
 
-    for (const auto &pair : come_from) {
-      const auto &point_cost = pair.second;
+    for (const auto& pair : come_from) {
+      const auto& point_cost = pair.second;
 
       if (is_barrier(point_cost.pos) || point_cost.pos == cur_pos) {
         continue;
       }
       if (std::any_of(avoid_points.begin(), avoid_points.end(),
-                      [&](const Point &p) {
+                      [&](const Point& p) {
                         return Point::at_same_row_or_col(p, point_cost.pos);
                       })) {
         if (point_cost.cost > fallback_bt_point_cost) {
@@ -396,7 +391,8 @@ public:
                   "invalid_point, come_from_size:%d",
                   come_from.size());
         return std::nullopt;
-      } else {
+      }
+      else {
         return fallback_bt_point;
       }
     }
@@ -404,10 +400,9 @@ public:
     return best_bt_point;
   };
 
-  static void add_backtrace_path(const Point &cur_pos,
-                                 std::vector<Point> &orig_path,
-                                 const std::vector<Point> &backtrace_path) {
-
+  static void add_backtrace_path(const Point& cur_pos,
+                                 std::vector<Point>& orig_path,
+                                 const std::vector<Point>& backtrace_path) {
     log_assert(backtrace_path.back() != cur_pos,
                "backtrace_path.front() == cur_pos");
     log_assert(orig_path.back() != cur_pos, "orig_path.back() == cur_pos");
@@ -433,7 +428,7 @@ public:
     // }
 
     // 2. 插入去往目标的路径
-    for (const auto &go_pos : backtrace_path) {
+    for (const auto& go_pos : backtrace_path) {
       // if (go_pos == backtrace_path.front()) {
       //   continue;
       // }

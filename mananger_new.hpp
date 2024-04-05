@@ -21,6 +21,7 @@ public:
     IoLayerNew io_layer;
     RobotCollisionAvoid robot_collision_avoid{&io_layer};
     ShipControl ship_control{&io_layer};
+    RobotControl robot_control{&io_layer};
 
     ManagerNew() = default;
 
@@ -159,9 +160,9 @@ public:
 
             auto start = std::chrono::high_resolution_clock::now();
             for (auto& robot : io_layer.robots) {
-                RobotControl::robot_get_goods(robot, io_layer);
-                RobotControl::find_new_goods(robot, io_layer);
-                RobotControl::go_near_berth(robot, io_layer);
+                robot_control.robot_get_goods(robot);
+                robot_control.find_new_goods(robot);
+                robot_control.go_near_berth(robot);
             }
             auto end = std::chrono::high_resolution_clock::now();
             log_info(
@@ -180,8 +181,8 @@ public:
                 .count());
 
             for (auto& robot : io_layer.robots) {
-                RobotControl::robots_move(robot, io_layer);
-                RobotControl::robots_pull_cycle(robot, io_layer);
+                robot_control.robots_move(robot);
+                robot_control.robots_pull_cycle(robot);
             }
 
             for (auto& ship : io_layer.ships) {

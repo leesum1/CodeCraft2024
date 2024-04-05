@@ -17,7 +17,6 @@
 #include <vector>
 
 class ManagerNew {
-
 public:
     IoLayerNew io_layer;
     RobotCollisionAvoid robot_collision_avoid{&io_layer};
@@ -33,7 +32,7 @@ public:
         // 将新货物添加到货物列表中
         for (int i = 0; i < io_layer.new_goods_list.size(); i++) {
             io_layer.map_goods_list[io_layer.new_goods_list[i].pos] =
-                    io_layer.new_goods_list[i];
+                io_layer.new_goods_list[i];
             log_assert(io_layer.new_goods_list[i].pos != invalid_point,
                        "invalid goods");
         }
@@ -54,16 +53,16 @@ public:
             if (it->second.end_cycle < io_layer.cur_cycle &&
                 it->second.status != GoodsStatus::Got) {
                 it = io_layer.map_goods_list.erase(it);
-            } else {
-
+            }
+            else {
                 if (update_goods_info) {
                     for (int i = 0; i < io_layer.berths.size(); i++) {
-                        auto &cur_berth = io_layer.berths[i];
+                        auto& cur_berth = io_layer.berths[i];
                         // auto cur_cost = io_layer.get_cost_from_berth_to_point(i,
                         // it->first);
                         auto cur_cost =
-                                io_layer.berths_come_from_for_robot[i].get_point_cost(
-                                        it->first);
+                            io_layer.berths_come_from_for_robot[i].get_point_cost(
+                                it->first);
 
                         if (!cur_cost.has_value()) {
                             continue;
@@ -132,98 +131,67 @@ public:
     }
 
     void run_game() {
-        std::pair<Point, Direction::Direction> check_ship_rot = {Point(0, 0),
-                                                                 Direction::UP};
-        bool first_check_ship_rot = true;
-
         for (int zhen = 1; zhen <= 15000; zhen++) {
             io_layer.input_cycle();
 
             // 更新货物信息
             goods_list_cycle();
 
-            if (zhen < 20) {
+            const int expect_robot_num = 16;
+            const int expect_ship_num = 1;
+
+            if (io_layer.robots.size() < expect_robot_num && io_layer.cur_money > io_layer.robot_price) {
                 io_layer.robot_lbot(io_layer.robot_shops.front());
             }
             if (zhen == 1) {
                 io_layer.ship_lboat(io_layer.ship_shops.back());
             }
+            if (io_layer.ships.size() < expect_ship_num && io_layer.cur_money > io_layer.ship_price && io_layer.robots.
+                size() == expect_robot_num) {
+                io_layer.ship_lboat(io_layer.ship_shops.front());
+            }
 
 
-//            for (auto &ship: io_layer.ships) {
-//                ship.clear_flags();
-//            }
-//            for (auto &ship: io_layer.ships) {
-////                log_assert(ship.cur_capacity == ship.goods_list.size(),
-////                           "ship.cur_capacity:%d ship.goods_list.size():%d",
-////                           ship.cur_capacity, ship.goods_list.size());
-//                ship_control.ship_control_fsm(ship);
-//                ship_control.drop_path_point_if_reach(ship);
-//                ship_control.ship_loading(ship);
-//                ship_control.go_to_berth(ship);
-//                ship_control.go_to_deliver(ship);
-//                ship_control.update_next_pos(ship);
-//                ship_control.output_command(ship);
-//            }
-
-//            for (auto &ship: io_layer.ships) {
-//                if (ship.status == 0) {
-//                    if (first_check_ship_rot) {
-//                        first_check_ship_rot = false;
-//                    } else {
-//                        log_assert(ship.pos == check_ship_rot.first,
-//                                   "ship(%d,%d) check_ship_rot(%d,%d)", P_ARG(ship.pos),
-//                                   P_ARG(check_ship_rot.first));
-//                        log_assert(ship.direction == check_ship_rot.second,
-//                                   "ship direction:%d check_ship_rot direction:%d",
-//                                   ship.direction, check_ship_rot.second);
-//                    }
-//                    io_layer.ship_rot(ship.id, 0);
-//                    check_ship_rot = Ship::calc_rot_action(ship.pos, ship.direction,
-//                                                           1);
-//                }
-//            }
-
-            for (auto &robot: io_layer.robots) {
+            for (auto& robot : io_layer.robots) {
                 robot.clear_flags();
             }
 
 
             auto start = std::chrono::high_resolution_clock::now();
-            for (auto &robot: io_layer.robots) {
+            for (auto& robot : io_layer.robots) {
                 RobotControl::robot_get_goods(robot, io_layer);
                 RobotControl::find_new_goods(robot, io_layer);
                 RobotControl::go_near_berth(robot, io_layer);
             }
             auto end = std::chrono::high_resolution_clock::now();
             log_info(
-                    "robot move time:%d",
-                    std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-                            .count());
+                "robot move time:%d",
+                std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+                .count());
             start = std::chrono::high_resolution_clock::now();
 
-            for (auto &robot: io_layer.robots) {
+            for (auto& robot : io_layer.robots) {
                 robot_collision_avoid.collision_avoid_step1(robot.id);
             }
             end = std::chrono::high_resolution_clock::now();
             log_info(
-                    "collision avoid step1 time:%d",
-                    std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-                            .count());
+                "collision avoid step1 time:%d",
+                std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+                .count());
 
-            for (auto &robot: io_layer.robots) {
+            for (auto& robot : io_layer.robots) {
                 RobotControl::robots_move(robot, io_layer);
                 RobotControl::robots_pull_cycle(robot, io_layer);
             }
 
-            for (auto &ship: io_layer.ships) {
+            for (auto& ship : io_layer.ships) {
                 ship.clear_flags();
             }
-            for (auto &ship: io_layer.ships) {
+            for (auto& ship : io_layer.ships) {
                 ship_control.sell_goods(ship);
-                log_assert(ship.cur_capacity == ship.goods_list.size(),
-                           "ship.cur_capacity:%d ship.goods_list.size():%d",
-                           ship.cur_capacity, ship.goods_list.size());
+                // log_assert(ship.cur_capacity == ship.goods_list.size(),
+                //            "ship.cur_capacity:%d ship.goods_list.size():%d",
+                //            ship.cur_capacity, ship.goods_list.size());
                 log_info("ship.cur_capacity:%d ship.goods_list.size():%d",
                          ship.cur_capacity, ship.goods_list.size());
                 ship_control.ship_control_fsm(ship);
@@ -254,13 +222,13 @@ public:
     void check_robot_collision() {
         std::unordered_set<Point> points_set{};
         bool has_collision = false;
-        for (auto &robot: io_layer.robots) {
-            const auto &cur_pos = robot.pos;
-            const auto &next_pos = robot.get_next_pos();
+        for (auto& robot : io_layer.robots) {
+            const auto& cur_pos = robot.pos;
+            const auto& next_pos = robot.get_next_pos();
             const bool cur_pos_has_collision_effect =
-                    io_layer.game_map.has_collision_effect_for_robot(cur_pos);
+                io_layer.game_map.has_collision_effect_for_robot(cur_pos);
             const bool next_pos_has_collision_effect =
-                    io_layer.game_map.has_collision_effect_for_robot(next_pos);
+                io_layer.game_map.has_collision_effect_for_robot(next_pos);
             const bool cur_pos_is_stop = Point::is_stop_point(cur_pos);
             const bool next_pos_is_stop = Point::is_stop_point(next_pos);
 
@@ -271,7 +239,8 @@ public:
                              io_layer.game_map.get_pos_type(cur_pos),
                              io_layer.game_map.map[cur_pos.x][cur_pos.y]);
                     break;
-                } else {
+                }
+                else {
                     points_set.insert(cur_pos);
                 }
             }
@@ -282,14 +251,15 @@ public:
                              io_layer.game_map.get_pos_type(next_pos),
                              io_layer.game_map.map[next_pos.x][next_pos.y]);
                     break;
-                } else {
+                }
+                else {
                     points_set.insert(next_pos);
                 }
             }
         }
 
         if (has_collision) {
-            for (auto &robot: io_layer.robots) {
+            for (auto& robot : io_layer.robots) {
                 log_info("robot:%d pos:(%d,%d) next_pos:(%d,%d)", robot.id, robot.pos.x,
                          robot.pos.y, robot.get_next_pos().x, robot.get_next_pos().y);
             }

@@ -31,15 +31,15 @@ public:
 
 
     std::function<int(const RobotControl::GoodsInfo&)> get_goods_strategy_lambda(const int robot_id) const {
-        // if (robot_id < io_layer.robots.size() / 2) {
-        //     auto time_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
-        //         return RobotControl::goods_strategy_remain_time_first(goods_info, true);
-        //     };
-        //     return time_strategy;
-        // }
-        //
+        if (robot_id < io_layer.robots.size() / 2) {
+            auto time_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
+                return RobotControl::goods_strategy_remain_time_first(goods_info, true);
+            };
+            return time_strategy;
+        }
+
         // auto quality_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
-        //     return RobotControl::goods_strategy_quality_first(goods_info, true);
+        //     return RobotControl::goods_strategy_quality_first(goods_info, false);
         // };
         // return quality_strategy;
 
@@ -159,18 +159,22 @@ public:
             // 更新货物信息
             goods_list_cycle();
 
-            const int expect_robot_num = 18;
-            const int expect_ship_num = 1;
+            const int expect_robot_num = 16;
+            const int expect_ship_num = 2;
 
             if (io_layer.robots.size() < expect_robot_num && io_layer.cur_money > io_layer.robot_price) {
-                io_layer.robot_lbot(io_layer.robot_shops.front());
+                const auto rand_robot_shop = io_layer.robot_shops.at(std::rand() % io_layer.robot_shops.size());
+                io_layer.robot_lbot(rand_robot_shop);
             }
             if (zhen == 1) {
                 io_layer.ship_lboat(io_layer.ship_shops.back());
             }
             if (io_layer.ships.size() < expect_ship_num && io_layer.cur_money > io_layer.ship_price && io_layer.robots.
                 size() == expect_robot_num) {
-                io_layer.ship_lboat(io_layer.ship_shops.front());
+                if (io_layer.statistic.goted_goods_value() - io_layer.statistic.selled_goods_value() > 17000) {
+                    const auto rand_ship_shop = io_layer.ship_shops.at(std::rand() % io_layer.ship_shops.size());
+                    io_layer.ship_lboat(rand_ship_shop);
+                }
             }
 
 
@@ -210,6 +214,9 @@ public:
                 ship.clear_flags();
             }
             for (auto& ship : io_layer.ships) {
+                if (io_layer.cur_cycle < 200) {
+                    continue;
+                }
                 ship_control.sell_goods_and_new_transport(ship);
                 // log_assert(ship.cur_capacity == ship.goods_list.size(),
                 //            "ship.cur_capacity:%d ship.goods_list.size():%d",
@@ -218,6 +225,7 @@ public:
                 //          ship.cur_capacity, ship.goods_list.size());
                 ship_control.ship_control_fsm(ship);
                 ship_control.drop_path_point_if_reach(ship);
+                // ship_control.must_go_to_delivery(ship);
                 ship_control.ship_loading(ship);
                 ship_control.go_to_berth(ship);
                 ship_control.go_to_deliver(ship);

@@ -31,7 +31,7 @@ public:
         std::vector<BerthInfo> berth_infos;
         for (auto& berth : io_layer->berths) {
             BerthInfo info{};
-            const auto [goods_num, goods_value] = berth.goods_goods_first_n(ship.capacity);
+            const auto [goods_num, goods_value] = berth.goods_first_n(ship.capacity);
             info.occupied_ship_id = berth.occupied_ship_id;
             info.berth_id = berth.id;
             info.goods_value = goods_value;
@@ -151,7 +151,11 @@ public:
         }
         int sel_berth_id;
         if (ship.berth_point_id.empty() && ship.fsm == ShipFSM::GO_TO_BERTH) {
-            sel_berth_id = get_rich_berth_id(ship);
+            // sel_berth_id = get_rich_berth_id(ship);
+            ship.start_new_transport(io_layer->cur_cycle, 0,
+                                     io_layer->get_best_berth_list(ship));
+            set_next_target_berth(ship);
+            sel_berth_id = ship.target_berth_id;
         }
         else {
             // update on ship_loading function
@@ -291,14 +295,32 @@ public:
     void sell_goods_and_new_transport(Ship& ship) {
         const auto deliver_id = io_layer->in_delivery_point_area(ship.pos);
         if (deliver_id.has_value() && deliver_id.value() == ship.target_delivery_id) {
-            for (auto& goods : ship.goods_list) {
-                io_layer->statistic.selled_goods_list.emplace_back(goods);
+            if (ship.normal_status()) {
+                for (auto& goods : ship.goods_list) {
+                    io_layer->statistic.selled_goods_list.emplace_back(goods);
+                }
+                log_trace("ship[%d] sell goods to deliver[%d], nums:%d,val:%d, spend time:%d ", ship.id,
+                          deliver_id.value(),
+                          ship.goods_list.size(), ship.cur_value(), ship.eclipsed_cycle(io_layer->cur_cycle));
+                ship.start_new_transport(io_layer->cur_cycle, deliver_id.value(),
+                                         io_layer->get_best_berth_list(ship));
+                set_next_target_berth(ship);
             }
-            log_trace("ship[%d] sell goods to deliver[%d], nums:%d,val:%d, spend time:%d ", ship.id, deliver_id.value(),
-                      ship.goods_list.size(), ship.cur_value(), ship.eclipsed_cycle(io_layer->cur_cycle));
-            ship.start_new_transport(io_layer->cur_cycle, deliver_id.value(),
-                                     io_layer->delivery_points_berth_loop.at(deliver_id.value()));
-            set_next_target_berth(ship);
+        }
+    }
+
+    void must_go_to_delivery(Ship& ship) {
+        const auto [deliver_id, distance] = io_layer->get_minimum_delivery_point_cost_for_ship(ship.pos);
+        const int remain_time = 15000 - io_layer->cur_cycle;
+        if (remain_time > 14000) {
+            return;
+        }
+        if ((remain_time - distance) < 10) {
+            log_trace("ship[%d] must go to delivery, deliver_id:%d, distance:%d, remain_time:%d", ship.id, deliver_id,
+                      distance, remain_time);
+            ship.fsm = ShipFSM::GO_TO_DELIVERY;
+            ship.set_target_delivery_id(deliver_id);
+            ship.path.clear();
         }
     }
 
@@ -575,7 +597,7 @@ public:
         const auto rich_berth_id = get_rich_berth_id(ship);
         const auto to_next_berth_distance = io_layer->berths_come_from_for_ship.at(rich_berth_id).
                                                       get_point_cost(ship.pos).value_or(20000);
-        const int next_gained_value = io_layer->berths[rich_berth_id].goods_goods_first_n(ship.capacity).
+        const int next_gained_value = io_layer->berths[rich_berth_id].goods_first_n(ship.capacity).
                                                                       second;
 
         const float quality_rate = static_cast<float>(cur_value + next_gained_value) / static_cast<float>(
@@ -597,7 +619,7 @@ public:
         const int ecllipse_time = ship.eclipsed_cycle(io_layer->cur_cycle);
         const int remain_capacity = ship.remain_capacity();
         const int cur_value = ship.cur_value();
-        const int next_gained_value = next_berth.goods_goods_first_n(remain_capacity).second;
+        const int next_gained_value = next_berth.goods_first_n(remain_capacity).second;
         const int next_to_deliver_distance = io_layer->get_minimum_delivery_point_cost_for_ship(next_berth.pos).second;
         const int to_next_berth_distance = io_layer->berths_come_from_for_ship.at(next_berth_id).
                                                      get_point_cost(ship.pos).value_or(20000);

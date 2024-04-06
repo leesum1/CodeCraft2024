@@ -25,6 +25,14 @@ namespace Tools {
     return std::vector<T>(v.begin() + first, v.end());
   }
 
+
+  template <typename T>
+  std::vector<T> first_n(const std::vector<T>& v, std::size_t n) {
+    auto last = std::min(v.size(), n);
+    return std::vector<T>(v.begin(), v.begin() + last);
+  }
+
+
   template <typename Key, typename Value>
   std::unordered_set<Key> map_to_set(const std::unordered_map<Key, Value>& m) {
     std::unordered_set<Key> s(m.size());

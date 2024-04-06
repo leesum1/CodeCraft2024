@@ -66,8 +66,11 @@ public:
         this->start_delivery_id = start_delivery_id;
         goods_list.clear();
         berth_point_id.clear();
-        berth_point_id.insert(berth_point_id.end(), new_berth_loop_id.begin() + 1,
-                              new_berth_loop_id.end() - 1);
+
+        for (const auto& id_tmp : new_berth_loop_id) {
+            berth_point_id.emplace_back(id_tmp);
+        }
+
         log_info("ship[%d] start new transport, start_delivery_id:%d", this->id,
                  start_delivery_id);
         for (const auto& id_tmp : berth_point_id) {

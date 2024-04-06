@@ -31,7 +31,8 @@ struct Point {
   }
 
   static bool is_adjacent(const Point& p1, const Point& p2) {
-    log_assert(!is_same(p1, p2), "is_same");
+    log_assert(!is_same(p1, p2), "is_same, (%d,%d) (%d,%d)", P_ARG(p1),
+               P_ARG(p2));
     // head_pos is not adjacent,(104,136),(105,136)
     return (at_same_row(p1, p2) && abs(p1.y - p2.y) == 1) ||
       (at_same_col(p1, p2) && abs(p1.x - p2.x) == 1);

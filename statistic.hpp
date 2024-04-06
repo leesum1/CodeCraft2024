@@ -15,10 +15,12 @@ public:
     std::vector<Goods> selled_goods_list{}; // 已经卖出的货物列表
 
     int total_goods_value() { return goods_value_sum(totol_goods_list); }
-
+    int total_goods_count() const { return totol_goods_list.size(); }
     int goted_goods_value() { return goods_value_sum(goted_goods_list); }
+    int goted_goods_count() const { return goted_goods_list.size(); }
 
     int selled_goods_value() { return goods_value_sum(selled_goods_list); }
+    int selled_goods_count() const { return selled_goods_list.size(); }
 
     void goods_statistic() {
         // 以 20 为单位,统计货物价值

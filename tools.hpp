@@ -5,8 +5,15 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <bits/random.h>
 
 namespace Tools {
+  inline int random(const int min, const int max) {
+    static std::mt19937 gen((unsigned int)time(nullptr));
+    std::uniform_int_distribution dis(min, max);
+    return dis(gen);
+  }
+
   double scaled_sigmoid(const double min, const double max, const double center, const double x) {
     // Calculate the sigmoid value
     const double sigmoid_value = 1 / (1 + std::exp(-0.1 * (x - center)));

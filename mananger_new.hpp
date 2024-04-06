@@ -37,17 +37,10 @@ public:
             };
             return time_strategy;
         }
-
-        // auto quality_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
-        //     return RobotControl::goods_strategy_quality_first(goods_info, false);
-        // };
-        // return quality_strategy;
-
-
-        auto time_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
-            return RobotControl::goods_strategy_remain_time_first(goods_info, true);
+        auto quality_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
+            return RobotControl::goods_strategy_quality_first(goods_info, true);
         };
-        return time_strategy;
+        return quality_strategy;
     }
 
     void goods_list_cycle() {
@@ -159,8 +152,16 @@ public:
             // 更新货物信息
             goods_list_cycle();
 
-            const int expect_robot_num = 16;
-            const int expect_ship_num = 2;
+
+            int expect_robot_num;
+            int expect_ship_num = 2;
+            if (io_layer.berths_come_from_for_robot[0].map_size() < 30000) {
+                expect_robot_num = 14;
+            }
+            else {
+                expect_robot_num = 18;
+            }
+
 
             if (io_layer.robots.size() < expect_robot_num && io_layer.cur_money > io_layer.robot_price) {
                 const auto rand_robot_shop = io_layer.robot_shops.at(std::rand() % io_layer.robot_shops.size());
@@ -171,7 +172,8 @@ public:
             }
             if (io_layer.ships.size() < expect_ship_num && io_layer.cur_money > io_layer.ship_price && io_layer.robots.
                 size() == expect_robot_num) {
-                if (io_layer.statistic.goted_goods_value() - io_layer.statistic.selled_goods_value() > 17000) {
+                if (io_layer.statistic.goted_goods_count() - io_layer.statistic.selled_goods_count() > io_layer.
+                    ship_capacity * 3) {
                     const auto rand_ship_shop = io_layer.ship_shops.at(std::rand() % io_layer.ship_shops.size());
                     io_layer.ship_lboat(rand_ship_shop);
                 }

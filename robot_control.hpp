@@ -374,7 +374,7 @@ public:
     }
   };
 
-  void find_new_goods(Robot& robot, const std::function<int(const GoodsInfo&)>& goods_strategy) {
+  void find_new_goods(Robot& robot, const std::function<int(const GoodsInfo&)>& goods_strategy) const {
     const Point& robot_pos = robot.pos;
     const Point& robot_next_pos = robot.next_pos_before_collision_check;
 
@@ -588,13 +588,13 @@ public:
     }
   };
 
-  bool select_goods_path_from_cur_pos(Robot& robot) {
+  bool select_goods_path_from_cur_pos(Robot& robot) const {
     log_trace("robot[%d] find_new_goods start from any postion", robot.id);
 
     auto start_time = std::chrono::steady_clock::now();
     const auto goods_set = Tools::map_to_set(io_layer->map_goods_list);
 
-    auto goods_goal_func = [&](Point p) {
+    auto goods_goal_func = [&](const Point& p) {
       if (goods_set.find(p) == goods_set.end()) {
         return false;
       }
@@ -614,7 +614,7 @@ public:
 
     bool goods_founded = false;
     auto goods_path = PATHHelper::bfs_path_v1(
-      robot.pos, goods_goal_func, io_layer->get_is_barrier_for_robot_lambda(robot.id, false, false, true),
+      robot.pos, goods_goal_func, io_layer->get_is_barrier_for_robot_lambda(robot.id, false, true, true),
       io_layer->get_find_neighbor_for_robot_lambda(), 20, goods_founded);
 
     auto end_time = std::chrono::steady_clock::now();
@@ -637,7 +637,7 @@ public:
     return true;
   }
 
-  bool select_goods_path_from_berth(Robot& robot, const std::function<int(const GoodsInfo&)>& goods_strategy) {
+  bool select_goods_path_from_berth(Robot& robot, const std::function<int(const GoodsInfo&)>& goods_strategy) const {
     const auto& robot_pos = robot.pos;
     const int robot_id = robot.id;
 
@@ -676,7 +676,7 @@ public:
 
     bool cut_success = false;
     auto search_come_from = PATHHelper::cut_path(
-      robot_pos, io_layer->get_is_barrier_for_robot_lambda(robot.id, false, false, true),
+      robot_pos, io_layer->get_is_barrier_for_robot_lambda(robot.id, false, true, true),
       io_layer->get_find_neighbor_for_robot_lambda(), searched_path, 8, cut_success);
 
     if (!cut_success) {
@@ -707,7 +707,8 @@ public:
     return true;
   }
 
-  bool select_goods_path_from_robot_shop(Robot& robot, const std::function<int(const GoodsInfo&)>& goods_strategy) {
+  bool select_goods_path_from_robot_shop(Robot& robot,
+                                         const std::function<int(const GoodsInfo&)>& goods_strategy) const {
     const auto& robot_pos = robot.pos;
     const int robot_id = robot.id;
 
@@ -741,7 +742,7 @@ public:
 
     bool cut_success = false;
     auto search_come_from = PATHHelper::cut_path(
-      robot_pos, io_layer->get_is_barrier_for_robot_lambda(robot.id, false, false, true),
+      robot_pos, io_layer->get_is_barrier_for_robot_lambda(robot.id, false, true, true),
       io_layer->get_find_neighbor_for_robot_lambda(), searched_path, 10, cut_success);
 
     if (!cut_success) {

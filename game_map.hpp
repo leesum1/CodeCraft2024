@@ -158,7 +158,7 @@ public:
       }
     }
 
-    if (std::rand() % 1024 < 200) {
+    if (Tools::random(1, 100) < 5) {
       rand_neighber_again();
     }
 

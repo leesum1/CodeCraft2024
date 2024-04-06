@@ -149,17 +149,24 @@ public:
         if (!ship.path.empty()) {
             return;
         }
-        int sel_berth_id;
+        int sel_berth_id = -1;
         if (ship.berth_point_id.empty() && ship.fsm == ShipFSM::GO_TO_BERTH) {
             // sel_berth_id = get_rich_berth_id(ship);
             ship.start_new_transport(io_layer->cur_cycle, 0,
                                      io_layer->get_best_berth_list(ship));
-            set_next_target_berth(ship);
-            sel_berth_id = ship.target_berth_id;
+            if (set_next_target_berth(ship)) {
+                sel_berth_id = ship.target_berth_id;
+            }
         }
         else {
             // update on ship_loading function
             sel_berth_id = ship.target_berth_id;
+        }
+
+        if (sel_berth_id == -1) {
+            log_info("ship[%d] dead", ship.id);
+            ship.fsm = ShipFSM::DEAD;
+            return;
         }
 
 
@@ -430,7 +437,13 @@ public:
                 log_trace("ship[%d] fsm change to GO_TO_BERTH", ship.id);
                 break;
             }
-            case ShipFSM::LOADING: {}
+            case ShipFSM::LOADING: {
+                break;
+            }
+            case ShipFSM::DEAD: {
+                log_info("ship[%d] dead", ship.id);
+                break;
+            }
             break;
             }
         }

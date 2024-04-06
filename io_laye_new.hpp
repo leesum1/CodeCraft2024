@@ -272,6 +272,7 @@ public:
             bool is_barrier1 = game_map.is_barrier_for_robot(p);
             bool is_barrier2 = false;
             bool is_barrier3 = false;
+            const Point& cur_pos = robots.at(robot_id).pos;
 
             if (!game_map.has_collision_effect_for_robot(p)) {
                 return is_barrier1;
@@ -284,7 +285,7 @@ public:
                 if (only_care_high_priority && !r.has_pass_collision_check) {
                     continue;
                 }
-                if (only_care_neighbor && !Point::is_adjacent(r.pos, p)) {
+                if (only_care_neighbor && !Point::is_adjacent(cur_pos, p)) {
                     continue;
                 }
 

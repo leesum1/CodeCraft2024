@@ -15,6 +15,7 @@ enum class ShipFSM {
     GO_TO_BERTH, // 前往泊位
     GO_TO_NEXT_BERTH, // 前往下一个泊位
     GO_TO_DELIVERY, // 前往交货点
+    DEAD // 死亡
 };
 
 enum class ShipCommand {

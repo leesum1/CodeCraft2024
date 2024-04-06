@@ -9,6 +9,7 @@
 #include <optional>
 #include <queue>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class PATHHelper {
@@ -45,7 +46,7 @@ public:
         }
         q.pop();
         for (auto& next : neighbors(cur)) {
-          if (is_barrier(next) || visited[next.x][next.y]) {
+          if (visited[next.x][next.y] || is_barrier(next)) {
             continue;
           }
           visited[next.x][next.y] = true;
@@ -72,8 +73,8 @@ public:
   }
 
   static std::unordered_map<Point, PointCost>
-  cut_path(const Point& start, std::function<bool(Point)> is_barrier,
-           std::function<std::vector<Point>(Point)> neighbors,
+  cut_path(const Point& start, const std::function<bool(Point)>& is_barrier,
+           const std::function<std::vector<Point>(Point)>& neighbors,
            std::vector<Point>& cur_path, int cut_step, bool& success) {
     log_assert(cut_step > 0, "cut_step should be greater than 0");
     log_assert(cur_path.size() > 0, "cur_path should not be empty");
@@ -84,8 +85,8 @@ public:
     }
 
     auto come_from = bfs_search(
-      start, [&Goal](Point p) { return p == Goal; }, is_barrier, neighbors,
-      PATHHelper::default_cost, 30);
+      start, [&Goal](const Point& p) { return p == Goal; }, is_barrier, neighbors,
+      default_cost, 50);
     bool founded = false;
     auto path = get_path(start, Goal, come_from, founded);
 
@@ -196,10 +197,12 @@ public:
              const std::function<int(const Point&)>& get_cost, int max_level) {
     std::queue<Point> q;
     std::unordered_map<Point, PointCost> come_from;
+    std::unordered_set<Point> visited;
     int level = 0;
 
     q.push(start);
     come_from[start] = PointCost(start, 0);
+    visited.insert(start);
 
     while (!q.empty() && level < max_level) {
       int cur_level_size = q.size();
@@ -212,12 +215,13 @@ public:
 
         q.pop();
         for (auto& next : neighbors(cur)) {
-          if (is_barrier(next) || come_from.find(next) != come_from.end()) {
+          if (visited.find(next) != visited.end() || is_barrier(next)) {
             continue;
           }
           q.push(next);
           come_from[next] =
             PointCost(cur, come_from[cur].cost + get_cost(next));
+          visited.insert(next);
         }
       }
       level++;

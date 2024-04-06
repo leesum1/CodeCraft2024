@@ -21,7 +21,7 @@ public:
    * @param robot_id 高优先级机器人id
    * @return std::optional<int>  低优先级机器人id
    */
-  std::optional<int> high_next_pos2low_cur_pos_collision(const int robot_id) {
+  std::optional<int> high_next_pos2low_cur_pos_collision(const int robot_id) const {
     const Point& robot_next_pos = io_layer->robots.at(robot_id).get_next_pos();
 
     if (Point::is_stop_point(robot_next_pos)) {
@@ -50,7 +50,7 @@ public:
    * @param robot_id
    * @return std::optional<int>
    */
-  std::optional<int> high_next_pos2low_next_pos_collision(const int robot_id) {
+  std::optional<int> high_next_pos2low_next_pos_collision(const int robot_id) const {
     const Point& robot_next_pos = io_layer->robots.at(robot_id).get_next_pos();
     if (Point::is_stop_point(robot_next_pos)) {
       return std::nullopt;
@@ -77,7 +77,7 @@ public:
    * @param robot_id
    * @return std::optional<int>
    */
-  std::optional<int> low_next_pos2high_cur_pos_collision(const int robot_id) {
+  std::optional<int> low_next_pos2high_cur_pos_collision(const int robot_id) const {
     const Point& robot_next_pos = io_layer->robots.at(robot_id).get_next_pos();
     if (Point::is_stop_point(robot_next_pos)) {
       return std::nullopt;
@@ -104,7 +104,7 @@ public:
    * @param robot_id
    * @return std::optional<int>
    */
-  std::optional<int> low_next_pos2high_next_pos_collision(const int robot_id) {
+  std::optional<int> low_next_pos2high_next_pos_collision(const int robot_id) const {
     const Point& robot_next_pos = io_layer->robots.at(robot_id).get_next_pos();
     if (Point::is_stop_point(robot_next_pos)) {
       return std::nullopt;
@@ -126,7 +126,7 @@ public:
   }
 
 
-  void collision_avoid_step1(const int robot_id) {
+  void collision_avoid_step1(const int robot_id) const {
     const auto& robot_next_pos_before =
       io_layer->robots.at(robot_id).get_next_pos();
     const auto& robot_cur_pos = io_layer->robots.at(robot_id).pos;
@@ -143,7 +143,7 @@ public:
               robot_id, P_ARG(robot_cur_pos), P_ARG(robot_next_pos_before));
 
     // 1. 低优先级机器人的下一步位置是否与高优先级机器人的下一步位置发生碰撞
-    auto low_next_pos2high_next_pos_collision_id =
+    const auto low_next_pos2high_next_pos_collision_id =
       low_next_pos2high_next_pos_collision(robot_id);
 
     if (low_next_pos2high_next_pos_collision_id.has_value()) {
@@ -153,8 +153,8 @@ public:
 
       bool cut_success = false;
       auto cut_come_from = PATHHelper::cut_path(
-        robot_cur_pos, io_layer->get_is_barrier_for_robot_lambda(robot_id, true, false, false),
-        io_layer->get_find_neighbor_for_robot_lambda(), cur_robot.path_list, 10, cut_success);
+        robot_cur_pos, io_layer->get_is_barrier_for_robot_lambda(robot_id, true, true, false),
+        io_layer->get_find_neighbor_for_robot_lambda(), cur_robot.path_list, 20, cut_success);
       if (cut_success) {
         log_trace("robot_id:%d cut_success", robot_id);
         cur_robot.set_final_next_pos(cur_robot.path_list.back());
@@ -184,8 +184,8 @@ public:
 
       bool cut_success = false;
       auto cut_come_from = PATHHelper::cut_path(
-        robot_cur_pos, io_layer->get_is_barrier_for_robot_lambda(robot_id, true, false, false),
-        io_layer->get_find_neighbor_for_robot_lambda(), cur_robot.path_list, 10, cut_success);
+        robot_cur_pos, io_layer->get_is_barrier_for_robot_lambda(robot_id, true, true, false),
+        io_layer->get_find_neighbor_for_robot_lambda(), cur_robot.path_list, 20, cut_success);
       if (cut_success) {
         log_trace("robot_id:%d cut_success", robot_id);
         cur_robot.set_final_next_pos(cur_robot.path_list.back());
@@ -234,7 +234,7 @@ public:
   fallback_to_bt_path(const int robot_id,
                       const std::unordered_map<Point, PointCost>& come_from,
                       const std::vector<Point>& avoid_points,
-                      const std::function<void()>& fail_callback) {
+                      const std::function<void()>& fail_callback) const {
     auto& cur_robot = io_layer->robots.at(robot_id);
     auto bt_point = PATHHelper::get_bt_point(
       cur_robot.pos, come_from, io_layer->get_is_barrier_for_robot_lambda(robot_id, true, false, false),

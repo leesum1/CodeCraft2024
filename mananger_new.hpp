@@ -29,12 +29,33 @@ public:
 
     void init_game() { io_layer.init(); }
 
+
+    std::function<int(const RobotControl::GoodsInfo&)> get_goods_strategy_lambda(const int robot_id) const {
+        // if (robot_id < io_layer.robots.size() / 2) {
+        //     auto time_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
+        //         return RobotControl::goods_strategy_remain_time_first(goods_info, true);
+        //     };
+        //     return time_strategy;
+        // }
+        //
+        // auto quality_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
+        //     return RobotControl::goods_strategy_quality_first(goods_info, true);
+        // };
+        // return quality_strategy;
+
+
+        auto time_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
+            return RobotControl::goods_strategy_remain_time_first(goods_info, true);
+        };
+        return time_strategy;
+    }
+
     void goods_list_cycle() {
         // 将新货物添加到货物列表中
-        for (int i = 0; i < io_layer.new_goods_list.size(); i++) {
-            io_layer.map_goods_list[io_layer.new_goods_list[i].pos] =
-                io_layer.new_goods_list[i];
-            log_assert(io_layer.new_goods_list[i].pos != invalid_point,
+        for (auto& i : io_layer.new_goods_list) {
+            io_layer.map_goods_list[i.pos] =
+                i;
+            log_assert(i.pos != invalid_point,
                        "invalid goods");
         }
 
@@ -42,9 +63,9 @@ public:
         // const bool update_goods_info = false;
 
         if (update_goods_info) {
-            for (int i = 0; i < io_layer.berths.size(); i++) {
-                io_layer.berths[i].clear_goods_info();
-                io_layer.berths[i].tmp_baned = false;
+            for (auto& berth : io_layer.berths) {
+                berth.clear_goods_info();
+                berth.tmp_baned = false;
             }
         }
 
@@ -138,7 +159,7 @@ public:
             // 更新货物信息
             goods_list_cycle();
 
-            const int expect_robot_num = 16;
+            const int expect_robot_num = 18;
             const int expect_ship_num = 1;
 
             if (io_layer.robots.size() < expect_robot_num && io_layer.cur_money > io_layer.robot_price) {
@@ -161,7 +182,7 @@ public:
             auto start = std::chrono::high_resolution_clock::now();
             for (auto& robot : io_layer.robots) {
                 robot_control.robot_get_goods(robot);
-                robot_control.find_new_goods(robot);
+                robot_control.find_new_goods(robot, get_goods_strategy_lambda(robot.id));
                 robot_control.go_near_berth(robot);
             }
             auto end = std::chrono::high_resolution_clock::now();
@@ -189,12 +210,12 @@ public:
                 ship.clear_flags();
             }
             for (auto& ship : io_layer.ships) {
-                ship_control.sell_goods(ship);
+                ship_control.sell_goods_and_new_transport(ship);
                 // log_assert(ship.cur_capacity == ship.goods_list.size(),
                 //            "ship.cur_capacity:%d ship.goods_list.size():%d",
                 //            ship.cur_capacity, ship.goods_list.size());
-                log_info("ship.cur_capacity:%d ship.goods_list.size():%d",
-                         ship.cur_capacity, ship.goods_list.size());
+                // log_info("ship.cur_capacity:%d ship.goods_list.size():%d",
+                //          ship.cur_capacity, ship.goods_list.size());
                 ship_control.ship_control_fsm(ship);
                 ship_control.drop_path_point_if_reach(ship);
                 ship_control.ship_loading(ship);

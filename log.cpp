@@ -19,18 +19,17 @@ void log_init(const char *log_path, int level) {
 }
 
 void log_raw(const char *fmt, ...) {
+
+
+    if (!log_file.has_value()) {
+        return;
+    }
+
     static char buf[1000];
     va_list args;
     va_start(args, fmt);
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-
-    if (!log_file.has_value()) {
-        std::cerr << buf;
-        return;
-    }
-
-
     log_file.value() << buf;
     log_file.value().flush();
 }
@@ -52,6 +51,6 @@ void log_write(int level, const char *file, int line, const char *fmt, ...) {
     va_end(args);
 
     log_file.value() << time_buf << " " << log_level_str[level] << " " << file
-                     << ":" << line << " " << buf << std::endl;
+        << ":" << line << " " << buf << std::endl;
     log_file.value().flush();
 }

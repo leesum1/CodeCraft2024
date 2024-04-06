@@ -8,18 +8,142 @@
 #include <utility>
 
 class RobotControl {
+  IoLayerNew* io_layer = nullptr;
+
+public:
   struct GoodsInfo {
     int value;
+    int avg_value;
     int distance_to_robot;
     int distance_to_berth;
     int remain_time;
   };
 
-  IoLayerNew* io_layer = nullptr;
 
-public:
   explicit RobotControl(IoLayerNew* io_layer) : io_layer(io_layer) {}
   ~RobotControl() = default;
+
+
+  /**
+   * @brief 获取货物对于当前机器人的价值信息
+   * @param goods 货物
+   * @param robot_come_from 机器人当前位置的打表
+   * @return
+   */
+  GoodsInfo get_goods_info_for_robot(const Goods& goods, ComeFromMap& robot_come_from) const {
+    GoodsInfo goods_info{};
+    goods_info.value = goods.money;
+    goods_info.avg_value = 100;
+    goods_info.distance_to_robot = robot_come_from.get_point_cost(goods.pos).value_or(20000);
+    goods_info.distance_to_berth = io_layer->get_minimum_berth_cost(goods.pos).second;
+    goods_info.remain_time = goods.end_cycle - io_layer->cur_cycle;
+    return goods_info;
+  }
+
+  /**
+   * @brief 寻物策略1: 优先选择价值最高的货物
+   * @param goods_info
+   * @return int 计算后的比重,越大越好
+   */
+  static int goods_strategy_value_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
+    return goods_info.value;
+  }
+
+  /**
+   * @brief 寻物策略2: 优先选择距离最近的货物
+   * @param goods_info
+   * @param only_care_robot_distance 是否只考虑机器人距离
+   * @return int 计算后的比重,越大越好
+   */
+  static int goods_strategy_distance_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
+    constexpr int max_distance = 2000;
+    if (only_care_robot_distance) {
+      return max_distance - goods_info.distance_to_robot;
+    }
+    return max_distance - goods_info.distance_to_robot - goods_info.distance_to_berth;
+  }
+
+  /**
+   * @brief 寻物策略3: 优先性价比最高的货物
+   * @param goods_info
+   * @param only_care_robot_distance 是否只考虑机器人距离
+   * @return int 计算后的比重,越大越好
+   */
+  static int goods_strategy_quality_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
+    if (only_care_robot_distance) {
+      return goods_info.value * 100 / (goods_info.distance_to_robot + 1);
+    }
+    return goods_info.value * 100 / (goods_info.distance_to_robot + goods_info.distance_to_berth + 1);
+  }
+
+
+  /**
+   * @brief 寻物策略4: 优先选择剩余时间最少的货物
+   * @param goods_info
+   * @param only_care_robot_distance 是否只考虑机器人距离
+   * @return int 计算后的比重,越大越好
+   */
+  static int goods_strategy_remain_time_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
+    if (goods_info.remain_time > 300) {
+      return goods_strategy_quality_first(goods_info, only_care_robot_distance);
+    }
+    // 最大值200
+    const double value_sig = Tools::scaled_sigmoid(1, 200, goods_info.avg_value, goods_info.value);
+
+    // 价值太低,不考虑
+    // x:55,y:3.186402
+    // x:56,y:3.413559
+    // x:57,y:3.663997
+    // x:58,y:3.940032
+    // x:59,y:4.244197
+    // x:60,y:4.579256
+    // x:61,y:4.948221
+    // x:62,y:5.354373
+    // x:63,y:5.801277
+    // x:64,y:6.292802
+    // x:65,y:6.833134
+    // x:66,y:7.426797
+    // x:67,y:8.078667
+    // x:68,y:8.793979
+    // x:69,y:9.578344
+    // x:70,y:10.437749
+    // x:71,y:11.378559
+    // x:72,y:12.407511
+    // x:73,y:13.531698
+    // x:74,y:14.758546
+    // x:75,y:16.095778
+    // x:76,y:17.551367
+    // x:77,y:19.133469
+    // x:78,y:20.850347
+    // x:79,y:22.710267
+    // x:80,y:24.721381
+    // x:81,y:26.891586
+    // x:82,y:29.228362
+    // x:83,y:31.738588
+    // x:84,y:34.428341
+    // x:85,y:37.302679
+    // x:86,y:40.365406
+    // x:87,y:43.618838
+    // x:88,y:47.063568
+    // x:89,y:50.698239
+    // x:90,y:54.519343
+    // x:91,y:58.521049
+    // x:92,y:62.695078
+    // x:93,y:67.030633
+    // x:94,y:71.514395
+    // x:95,y:76.130593
+    // x:96,y:80.861156
+    // x:97,y:85.685939
+    // x:98,y:90.583035
+    // x:99,y:95.529142
+    if (value_sig < 60) {
+      return 0;
+    }
+    // 最大值为150,确保低价值不会被选中
+    const int remine_time_val = 150 - goods_info.remain_time / 2;
+    // 给一个乘数,确保选择剩余时间少的货物
+    return (remine_time_val + static_cast<int>(value_sig)) * 2000;
+  }
 
 
   /**
@@ -27,31 +151,28 @@ public:
    *
    * @param robot_id
    * @param robot_shop_pos
+   * @param goods_strategy 货物选择策略
    * @param founded
    * @return std::pair<Goods, std::vector<Point>>
    */
   std::pair<Goods, std::vector<Point>>
   find_best_goods_path_from_robot_shop(
     const Point& robot_shop_pos,
-    bool& founded) {
-    auto robot_shop = std::find(io_layer->robot_shops.begin(),
-                                io_layer->robot_shops.end(), robot_shop_pos);
+    const std::function<int(const GoodsInfo&)>& goods_strategy, bool& founded) const {
+    const auto robot_shop = std::find(io_layer->robot_shops.begin(),
+                                      io_layer->robot_shops.end(), robot_shop_pos);
 
     if (robot_shop == io_layer->robot_shops.end()) {
       log_fatal("robot shop(%d,%d) not found", P_ARG(robot_shop_pos));
     }
 
-    auto robot_shop_index =
+    const auto robot_shop_index =
       std::distance(io_layer->robot_shops.begin(), robot_shop);
     auto& robot_shop_come_from =
       io_layer->robot_shops_come_from.at(robot_shop_index);
 
-    // 查找到最优的高于平均值的货物
     Goods goods_final_hi = invalid_goods;
-    float max_weight_hi = 0.0;
-    // 查找到最优的低于平均值的货物
-    Goods goods_final_lo = invalid_goods;
-    float max_weight_lo = 0.0;
+    int max_weight_hi = -1;
     bool success = false;
 
     // 遍历所有的货物,找到最有价值的货物
@@ -77,48 +198,22 @@ public:
       const bool can_fetch_goods = !goods.second.is_disappeared(
         io_layer->cur_cycle + to_goods_path_cost.value() + 5);
 
-      const int max_path_size = 10000;
 
-      if (!can_fetch_goods && to_goods_path_cost > max_path_size) {
+      if (!can_fetch_goods) {
         continue;
       }
-      // 货物还剩多久消失
-      int goods_remin_time =
-        std::max(300, goods.second.end_cycle - io_layer->cur_cycle);
 
-      // 从货物到港口的最短路径
-      const auto to_berth_path_cost =
-        io_layer->get_minimum_berth_cost(goods.first);
+      const auto goods_info = get_goods_info_for_robot(goods.second, robot_shop_come_from);
+      const int cur_weight = goods_strategy(goods_info);
 
-      // 使用贪心
-      // float cur_weight = static_cast<float>(goods.second.money) /
-      //                    (to_goods_path_cost.value() + goods_remin_time);
-      float cur_weight = static_cast<float>(goods.second.money);
-      // if (cur_weight > max_weight_hi) {
-      //   max_weight_hi = cur_weight;
-      //   goods_final_hi = goods.second;
-      //   founded = true;
-      // }
-
-      // 分别找到高于平均值和低于平均值的货物
-      if (goods.second.money >= (io_layer->total_goods_avg_money())) {
-        if (cur_weight > max_weight_hi) {
-          max_weight_hi = cur_weight;
-          goods_final_hi = goods.second;
-          founded = true;
-        }
-      }
-      else {
-        if (cur_weight > max_weight_lo) {
-          max_weight_lo = cur_weight;
-          goods_final_lo = goods.second;
-          founded = true;
-        }
+      if (cur_weight > max_weight_hi) {
+        max_weight_hi = cur_weight;
+        goods_final_hi = goods.second;
+        founded = true;
       }
     }
 
-    const auto& goods_final =
-      max_weight_hi != -1 ? goods_final_hi : goods_final_lo;
+    const auto& goods_final = goods_final_hi;
 
     auto path_tmp =
       robot_shop_come_from.get_path_to_point(goods_final.pos, success);
@@ -133,18 +228,17 @@ public:
    *
    * @param berth_id
    * @param robot_id
+   * @param goods_strategy 货物选择策略
    * @param founded
    * @return std::pair<Goods, std::vector<Point>>
    */
   std::pair<Goods, std::vector<Point>>
   find_best_goods_path_from_berth(const int berth_id,
-                                  const int robot_id, bool& founded) {
-    // 查找到最优的高于平均值的货物
+                                  const int robot_id, const std::function<int(const GoodsInfo&)>& goods_strategy,
+                                  bool& founded) const {
     Goods goods_final_hi = invalid_goods;
-    float max_weight_hi = 0.0;
-    // 查找到最优的低于平均值的货物
-    Goods goods_final_lo = invalid_goods;
-    float max_weight_lo = 0.0;
+    int max_weight_hi = -1;
+
 
     bool success = false;
     // 遍历所有的货物,找到最有价值的货物
@@ -172,97 +266,22 @@ public:
       const bool can_fetch_goods = !goods.second.is_disappeared(
         io_layer->cur_cycle + to_goods_path_cost.value() + 5);
 
-      const int max_path_size = 10000;
 
-      if (!can_fetch_goods && to_goods_path_cost > max_path_size) {
+      if (!can_fetch_goods) {
         continue;
       }
-      // 货物还剩多久消失
-      int goods_remin_time = (goods.second.end_cycle - io_layer->cur_cycle);
-
-      if (goods_remin_time < 200) {
-        goods_remin_time = 200;
-      }
-
-      // 从货物到港口的最短路径
-      const auto to_berth_path_cost =
-        io_layer->get_minimum_berth_cost(goods.first);
-
-      // TODO: 优化权重计算
-      // 都是越小越好
-
-      // /** 策略1**/
-      // const float to_goods_one =
-      //     to_goods_path_cost.value() / static_cast<float>(max_path_size);
-
-      // const float goods_remin_time_one =
-      //     goods_remin_time / static_cast<float>(max_path_size);
-
-      // float cur_weight =
-      //     1 / (0.6 * to_goods_one + 0.017 * goods_remin_time_one);
-      // /** 策略1**/
-
-      /** 策略2*/
-
-      // const float to_goods_one = 6400.0 / (to_goods_path_cost.value() + 1);
-      // const float to_berth_one =
-      //     to_berth_path_cost.second / static_cast<float>(max_path_size);
-      // float goods_remin_time_one =
-      //     4200000.0 / (goods_remin_time * goods_remin_time + 1);
-
-      // if (to_goods_path_cost.value() > 71) {
-      //   goods_remin_time_one = goods_remin_time_one / 2;
-      // }
-
-      // float cur_weight = to_goods_one + goods_remin_time_one;
-
-      /** 策略2*/
-
-      /** 策略3*/
-      // const float to_goods_one = to_goods_path_cost.value();
-
-      // float cur_weight = 1 / (to_goods_one + 1);
-      /** 策略3*/
-
-      //**策略4*/
-      // float cur_weight = 1.0 / (to_goods_path_cost.value());
-
-      // if (io_layer->final_time) {
-      //   cur_weight =
-      //       1.0 / (to_goods_path_cost.value() + to_berth_path_cost.second);
-      // }
-
-      float cur_weight =
-        static_cast<float>(goods.second.money) / (to_goods_path_cost.value());
+      const auto goods_info = get_goods_info_for_robot(goods.second, io_layer->berths_come_from_for_robot[berth_id]);
+      const int cur_weight = goods_strategy(goods_info);
 
       if (cur_weight > max_weight_hi) {
         max_weight_hi = cur_weight;
         goods_final_hi = goods.second;
         founded = true;
       }
-
-      // // 分别找到高于平均值和低于平均值的货物
-      // if (goods.second.money >= (io_layer->total_goods_avg_money())) {
-      //   // if (true) {
-      //   if (cur_weight > max_weight_hi) {
-      //     max_weight_hi = cur_weight;
-      //     goods_final_hi = goods.second;
-      //     founded = true;
-      //   }
-      // } else {
-      //   if (cur_weight > max_weight_lo) {
-      //     max_weight_lo = cur_weight;
-      //     goods_final_lo = goods.second;
-      //     founded = true;
-      //   }
-      // }
     }
 
-    const auto& goods_final =
-      max_weight_hi != -1 ? goods_final_hi : goods_final_lo;
+    const auto& goods_final = goods_final_hi;
 
-    // auto path_tmp = io_layer->get_path_from_berth_to_point(
-    //     berth_id, goods_final.pos, success);
 
     auto path_tmp =
       io_layer->berths_come_from_for_robot[berth_id].get_path_to_point(
@@ -355,7 +374,7 @@ public:
     }
   };
 
-  void find_new_goods(Robot& robot) {
+  void find_new_goods(Robot& robot, const std::function<int(const GoodsInfo&)>& goods_strategy) {
     const Point& robot_pos = robot.pos;
     const Point& robot_next_pos = robot.next_pos_before_collision_check;
 
@@ -396,8 +415,8 @@ public:
 
     // 1. 如果机器人位于港口区域,则从港口区域查表选择货物,并计算路径
     log_trace("robot[%d] find_new_goods from berth from  ", robot.id);
-    bool found_goods_path_from_berth =
-      select_goods_path_from_berth(robot);
+    const bool found_goods_path_from_berth =
+      select_goods_path_from_berth(robot, goods_strategy);
     log_trace("robot[%d] find_new_goods start from berth, result:%d  ",
               robot.id, found_goods_path_from_berth);
 
@@ -406,8 +425,11 @@ public:
     }
     // 2. 如果机器人位于机器人商店区域,则从机器人商店查表选择货物,并计算路径
     log_trace("robot[%d] find_new_goods from robot shop ", robot.id);
-    bool found_goods_path_from_robot_shop =
-      select_goods_path_from_robot_shop(robot);
+    const bool found_goods_path_from_robot_shop =
+      select_goods_path_from_robot_shop(robot, [](const GoodsInfo& goods_info) -> int {
+        return goods_strategy_quality_first(goods_info, false);
+      });
+
     log_trace("robot[%d] find_new_goods start from robot shop, result:%d  ",
               robot.id, found_goods_path_from_robot_shop);
     if (found_goods_path_from_robot_shop) {
@@ -615,7 +637,7 @@ public:
     return true;
   }
 
-  bool select_goods_path_from_berth(Robot& robot) {
+  bool select_goods_path_from_berth(Robot& robot, const std::function<int(const GoodsInfo&)>& goods_strategy) {
     const auto& robot_pos = robot.pos;
     const int robot_id = robot.id;
 
@@ -636,7 +658,7 @@ public:
     bool goods_founded = false;
 
     auto search_result = find_best_goods_path_from_berth(
-      search_berth_id, robot.id, goods_founded);
+      search_berth_id, robot.id, goods_strategy, goods_founded);
 
     if (!goods_founded) {
       log_trace("robot[%d] in_berth_search_area failed, not found goods",
@@ -685,7 +707,7 @@ public:
     return true;
   }
 
-  bool select_goods_path_from_robot_shop(Robot& robot) {
+  bool select_goods_path_from_robot_shop(Robot& robot, const std::function<int(const GoodsInfo&)>& goods_strategy) {
     const auto& robot_pos = robot.pos;
     const int robot_id = robot.id;
 
@@ -701,7 +723,7 @@ public:
     bool goods_founded = false;
 
     auto search_result = find_best_goods_path_from_robot_shop(
-      can_search.value(), goods_founded);
+      can_search.value(), goods_strategy, goods_founded);
 
     if (!goods_founded) {
       log_trace("robot[%d] in_robot_shop_area failed, not found goods",

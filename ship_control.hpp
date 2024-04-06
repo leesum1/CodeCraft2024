@@ -55,7 +55,7 @@ public:
         int berth_id = get_random_berth_id(ship);
         int max_value = 0;
         for (auto& info : berth_infos) {
-            if (info.occupied_ship_id.has_value() || info.berth_id == ship.target_berth_id) {
+            if (io_layer->berth_had_other_ship(ship.id, info.berth_id)) {
                 continue;
             }
             if (info.goods_value >= max_value) {
@@ -150,7 +150,7 @@ public:
             return;
         }
         int sel_berth_id;
-        if (ship.fsm == ShipFSM::GO_TO_BERTH) {
+        if (ship.berth_point_id.empty() && ship.fsm == ShipFSM::GO_TO_BERTH) {
             sel_berth_id = get_rich_berth_id(ship);
         }
         else {
@@ -275,17 +275,30 @@ public:
         ship.next_command_before_collison = next_command;
     }
 
+    bool set_next_target_berth(Ship& ship) {
+        while (!ship.berth_point_id.empty()) {
+            if (!io_layer->berth_had_other_ship(ship.id, ship.berth_point_id.front())) {
+                ship.set_target_berth_id(ship.berth_point_id.front());
+                ship.berth_point_id.pop_front();
+                return true;
+            }
+            ship.berth_point_id.pop_front();
+        }
+        return false;
+    }
 
-    void sell_goods(Ship& ship) const {
-        auto deliver_id = io_layer->in_delivery_point_area(ship.pos);
+
+    void sell_goods_and_new_transport(Ship& ship) {
+        const auto deliver_id = io_layer->in_delivery_point_area(ship.pos);
         if (deliver_id.has_value() && deliver_id.value() == ship.target_delivery_id) {
             for (auto& goods : ship.goods_list) {
                 io_layer->statistic.selled_goods_list.emplace_back(goods);
             }
             log_trace("ship[%d] sell goods to deliver[%d], nums:%d,val:%d, spend time:%d ", ship.id, deliver_id.value(),
                       ship.goods_list.size(), ship.cur_value(), ship.eclipsed_cycle(io_layer->cur_cycle));
-            ship.goods_list.clear();
-            ship.start_cycle = io_layer->cur_cycle;
+            ship.start_new_transport(io_layer->cur_cycle, deliver_id.value(),
+                                     io_layer->delivery_points_berth_loop.at(deliver_id.value()));
+            set_next_target_berth(ship);
         }
     }
 
@@ -373,6 +386,7 @@ public:
                 if (should_go_to_berth_and_loading) {
                     ship.fsm = ShipFSM::LOADING;
                     ship.next_command_before_collison = ShipCommand::BERTH;
+                    io_layer->berths[ship.target_berth_id].occupied_ship_id = ship.id;
                     ship.path.clear();
                     log_trace("ship[%d] fsm change to LOADING", ship.id);
                 }
@@ -382,6 +396,7 @@ public:
                 // 当位于泊位附近时,应该停靠到泊位中
                 if (should_go_to_berth_and_loading) {
                     ship.fsm = ShipFSM::LOADING;
+                    io_layer->berths[ship.target_berth_id].occupied_ship_id = ship.id;
                     ship.next_command_before_collison = ShipCommand::BERTH;
                     ship.path.clear();
                     log_trace("ship[%d] fsm change to LOADING", ship.id);
@@ -412,19 +427,28 @@ public:
 
         if (ship.full()) {
             ship.fsm = ShipFSM::GO_TO_DELIVERY;
+            cur_berth.occupied_ship_id = std::nullopt;
             log_trace("ship[%d] full, change to GO_TO_DELIVERY", ship.id);
             return;
         }
         if (cur_berth.is_empty()) {
-            const auto high_quality_berth_id = find_higher_quality_berth(ship);
-            if (high_quality_berth_id.has_value()) {
-                ship.target_berth_id = high_quality_berth_id.value();
-                ship.fsm = ShipFSM::GO_TO_NEXT_BERTH;
-                log_trace("ship[%d] change to go to next berth[%d]", ship.id, ship.target_berth_id);
+            if (ship.berth_point_id.empty()) {
+                ship.fsm = ShipFSM::GO_TO_DELIVERY;
+                cur_berth.occupied_ship_id = std::nullopt;
+                log_trace("cur_berth is empty, berth_point_id is empty, ship[%d] change to GO_TO_DELIVERY", ship.id);
             }
             else {
-                ship.fsm = ShipFSM::GO_TO_DELIVERY;
-                log_trace("cur_berth is empty, ship[%d] change to GO_TO_DELIVERY", ship.id);
+                if (set_next_target_berth(ship)) {
+                    ship.fsm = ShipFSM::GO_TO_NEXT_BERTH;
+                    log_trace("cur berth is empty, ship[%d] change to go to next berth[%d], cur_cap:%d ", ship.id,
+                              ship.target_berth_id, ship.cur_capacity);
+                }
+                else {
+                    ship.fsm = ShipFSM::GO_TO_DELIVERY;
+                    cur_berth.occupied_ship_id = std::nullopt;
+                    log_trace("cur_berth is empty, berth_point_id is empty, ship[%d] change to GO_TO_DELIVERY",
+                              ship.id);
+                }
             }
             return;
         }
@@ -555,7 +579,7 @@ public:
                                                                       second;
 
         const float quality_rate = static_cast<float>(cur_value + next_gained_value) / static_cast<float>(
-            to_deliver_distance + to_next_berth_distance +
+            to_deliver_distance * 1 + to_next_berth_distance +
             ecllipse_time + 1
         );
 
@@ -578,7 +602,7 @@ public:
         const int to_next_berth_distance = io_layer->berths_come_from_for_ship.at(next_berth_id).
                                                      get_point_cost(ship.pos).value_or(20000);
         const float quality_rate = static_cast<float>(cur_value + next_gained_value) /
-            static_cast<float>(next_to_deliver_distance + to_next_berth_distance + ecllipse_time + 1);
+            static_cast<float>(next_to_deliver_distance * 1 + to_next_berth_distance + ecllipse_time + 1);
 
         return quality_rate;
     }
@@ -592,15 +616,16 @@ public:
         std::optional<int> high_quality_berth_id;
         float max_quality_rate = ship_cur_quality_rate(ship);
         for (auto& berth : io_layer->berths) {
-            if (berth.occupied_ship_id.has_value() || berth.id == ship.target_berth_id) {
+            if (berth.id == ship.target_berth_id) {
                 continue;
             }
             const float quality_rate = ship_next_quality_rate(ship, berth.id);
-            if (quality_rate > max_quality_rate) {
+            if (quality_rate >= max_quality_rate) {
                 max_quality_rate = quality_rate;
                 high_quality_berth_id = berth.id;
             }
         }
+
         return high_quality_berth_id;
     }
 };

@@ -64,6 +64,9 @@ public:
     std::vector<Point> ship_shops{}; // 船只商店
     std::vector<Point> delivery_points{}; // 交货点
 
+    const int delivery_id_offset = 10;
+    std::vector<std::vector<int>> delivery_points_berth_loop{};
+
     Statistic statistic{};
 
     int ship_capacity = 0;
@@ -92,6 +95,99 @@ public:
     explicit IoLayerNew() = default;
 
     ~IoLayerNew() = default;
+
+    bool berth_had_other_ship(const int ship_id, const int berth_id) const {
+        for (auto& ship : ships) {
+            if (ship.id == ship_id) {
+                continue;
+            }
+            if (ship.target_berth_id == berth_id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    int calc_delivery_point_id(const int id) const {
+        const int id_by_offset = id - delivery_id_offset;
+        log_assert(id_by_offset<delivery_points.size(), "delivery_points size:%d, cur_id:%d", delivery_points.size(),
+                   id_by_offset);
+        return id_by_offset;
+    }
+
+    void mini_ship_loop_path_init() {
+        auto stime = std::chrono::high_resolution_clock::now();
+        std::vector<int> berths_id{};
+        for (int i = 0; i < berths.size(); i++) {
+            berths_id.push_back(i);
+        }
+        std::vector<std::pair<std::vector<int>, int>> res{};
+        while (std::next_permutation(berths_id.begin(), berths_id.end())) {
+            int dis_sum = 0;
+            const int first_berth_id = berths_id[0];
+            const int last_berth_id = berths_id[berths_id.size() - 1];
+            const auto [to_delivery_id ,to_delivery_dis] = get_minimum_delivery_point_cost_for_ship(
+                berths[first_berth_id].pos);
+            const auto [from_delivery_id,from_delivery_dis] = get_minimum_delivery_point_cost_for_ship(
+                berths[last_berth_id].pos);
+            dis_sum += to_delivery_dis;
+            dis_sum += from_delivery_dis;
+
+            // 使用滑动窗口获取 berths_id 的两个元素
+            for (int i = 0; i < berths_id.size() - 1; i++) {
+                const int berth_id_a = berths_id[i];
+                const int berth_id_b = berths_id[i + 1];
+                // 获取 a 到 b 的距离
+                const int distance = berths_come_from_for_ship[berth_id_a]
+                                     .get_point_cost(berths[berth_id_b].pos)
+                                     .value();
+                dis_sum += distance;
+            }
+            std::vector<int> v_tmp{};
+            v_tmp.emplace_back(to_delivery_id + 10);
+            for (auto& v : berths_id) {
+                v_tmp.push_back(v);
+            }
+            v_tmp.emplace_back(from_delivery_id + 10);
+            res.emplace_back(v_tmp, dis_sum);
+        }
+        std::sort(res.begin(), res.end(), [](const std::pair<std::vector<int>, int>& a,
+                                             const std::pair<std::vector<int>, int>& b) {
+            return a.second < b.second;
+        });
+
+        for (auto& _ : delivery_points) {
+            delivery_points_berth_loop.emplace_back();
+        }
+
+        log_assert(delivery_points_berth_loop.size() == delivery_points.size(),
+                   "delivery_points_berth_loop size:%d, delivery_points size:%d",
+                   delivery_points_berth_loop.size(), delivery_points.size());
+        int mini_path_size = 999999;
+        for (auto& [loop_point_id_list,path_size] : res) {
+            if (path_size <= mini_path_size) {
+                mini_path_size = path_size;
+                const int delivery_id = calc_delivery_point_id(loop_point_id_list[0]);
+                delivery_points_berth_loop.at(delivery_id) = loop_point_id_list;
+            }
+        }
+        for (auto& v : delivery_points_berth_loop) {
+            const int delivery_id = calc_delivery_point_id(v[0]);
+            log_info("delivery_id:%d,loop_path:", delivery_id);
+            for (auto& v1 : v) {
+                log_info("%d", v1);
+            }
+        }
+
+
+        auto etime = std::chrono::high_resolution_clock::now();
+        log_info("time:%d ms",
+                 std::chrono::duration_cast<std::chrono::milliseconds>(etime - stime)
+                 .count());
+    }
+
+
     /**
      * @brief 生成判断是否是障碍物的lambda函数
      *
@@ -321,6 +417,7 @@ public:
         for (auto& robot : robots) {
             robot.printf_goods_statistic();
         }
+        statistic.goods_statistic();
         fprintf(stderr,
                 "total_goods_num:%zu,total_goods_money:%d,goted_goods_num:%zu,"
                 "goted_goods_money:%d,selled_goods_num:%zu,selled_goods_money:%d\n",
@@ -804,6 +901,7 @@ public:
         log_info("IoLayer init time:%d ms",
                  std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
                  .count());
+        mini_ship_loop_path_init();
         init_done();
     }
 

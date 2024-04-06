@@ -39,8 +39,10 @@ public:
 
     // 规划的路径
     std::vector<Point> path{};
+    std::list<int> berth_point_id{}; // 规划好的泊位点,按照顺序依次访问
     int target_berth_id = -1; // 目标泊位id
     int target_delivery_id = -1; // 目标交货点id
+    int start_delivery_id = -1; // 从哪个交货点开始运货
     ShipFSM fsm = ShipFSM::GO_TO_BERTH;
 
     // 碰撞检测前计算出来的信息
@@ -56,6 +58,23 @@ public:
     // 一些状态位置
     std::vector<Goods> goods_list{}; // 货物列表
     int start_cycle = 0; // 开始运输货物的起始时间, 当到达交货点时, 会更新为当前周期
+
+
+    void start_new_transport(const int cur_cycle, const int start_delivery_id,
+                             const std::vector<int>& new_berth_loop_id) {
+        this->start_cycle = cur_cycle;
+        this->start_delivery_id = start_delivery_id;
+        goods_list.clear();
+        berth_point_id.clear();
+        berth_point_id.insert(berth_point_id.end(), new_berth_loop_id.begin() + 1,
+                              new_berth_loop_id.end() - 1);
+        log_info("ship[%d] start new transport, start_delivery_id:%d", this->id,
+                 start_delivery_id);
+        for (const auto& id_tmp : berth_point_id) {
+            log_info("ship[%d] berth_point_id:%d", this->id, id_tmp);
+            log_assert(id_tmp<10, "id_tmp:%d", id_tmp);
+        }
+    }
 
     /**
      * @brief 轮船已经在运输中花费的周期

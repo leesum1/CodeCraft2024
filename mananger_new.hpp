@@ -219,7 +219,7 @@ public:
                 ship.clear_flags();
             }
             for (auto& ship : io_layer.ships) {
-                if (io_layer.cur_cycle < 200) {
+                if (io_layer.cur_cycle < 600) {
                     continue;
                 }
                 ship_control.sell_goods_and_new_transport(ship);

@@ -1,11 +1,11 @@
 
 #pragma once
 
-#include <complex>
+#include <ctime>
+#include <random>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <bits/random.h>
 
 namespace Tools {
   inline int random(const int min, const int max) {

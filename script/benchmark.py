@@ -54,7 +54,8 @@ def parse_score_from_stderr(stderr):
 # 定义一个函数来运行命令并返回输出
 # 定义一个函数来运行命令并返回输出
 def run_command(cmd: str):
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     try:
         stdout, stderr = process.communicate(timeout=150)  # 设置超时时间为10秒
     except subprocess.TimeoutExpired:
@@ -72,8 +73,9 @@ if __name__ == '__main__':
     repeat_size = 5
     # 创建一个新的命令列表，其中每个命令都重复 5 次
     test_cmds_repeated = [cmd for cmd in test_cmds for _ in range(repeat_size)]
-    semi_maps_list_repeated = [map_path for map_path in semi_maps_list for _ in range(repeat_size)]
-
+    semi_maps_list_repeated = [
+        map_path for map_path in semi_maps_list for _ in range(repeat_size)]
+    run_command(f'make -C {HOME_PATH}')
     start_time = time.time()
     # 使用ThreadPoolExecutor并行运行所有命令
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
@@ -115,7 +117,8 @@ if __name__ == '__main__':
         f"Total maps: {len(scores_min_dict)} Total score: {sum(scores_min_dict.values())},average score: {sum(scores_min_dict.values()) / len(scores_min_dict)}")
 
     # 计算平均分
-    scores_avg_dict = {map: scores_sum_dict[map] / counts_dict[map] for map in scores_sum_dict}
+    scores_avg_dict = {
+        map: scores_sum_dict[map] / counts_dict[map] for map in scores_sum_dict}
     print("Average score")
     for map, score in scores_avg_dict.items():
         print(f"{map} : {score}")

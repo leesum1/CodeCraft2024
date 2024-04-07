@@ -1,3 +1,3 @@
 #pragma once
 
-// #define LOG_ENABLE
+#define LOG_ENABLE

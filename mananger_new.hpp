@@ -67,7 +67,8 @@ public:
 
         // 删除 goods_list 中已经消失的货物
         for (auto it = io_layer.map_goods_list.begin(); it != io_layer.map_goods_list.end();) {
-            if (it->second.end_cycle < io_layer.cur_cycle && it->second.status != GoodsStatus::Got) {
+            if (it->second.end_cycle < io_layer.cur_cycle || it->second.status == GoodsStatus::Got || it->second.status
+                == GoodsStatus::Dead) {
                 it = io_layer.map_goods_list.erase(it);
             }
             else {
@@ -239,7 +240,6 @@ public:
 
 
             io_layer.output_cycle();
-            log_info("map_goods_list size:%d", io_layer.map_goods_list.size());
             io_layer.print_goods_info();
 
             check_robot_collision();

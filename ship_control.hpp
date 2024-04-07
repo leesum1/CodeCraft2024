@@ -309,6 +309,8 @@ public:
                 log_trace("ship[%d] sell goods to deliver[%d], nums:%d,val:%d, spend time:%d ", ship.id,
                           deliver_id.value(),
                           ship.goods_list.size(), ship.cur_value(), ship.eclipsed_cycle(io_layer->cur_cycle));
+                ship.goods_list.clear();
+                ship.start_cycle = io_layer->cur_cycle;
                 ship.start_new_transport(io_layer->cur_cycle, deliver_id.value(),
                                          io_layer->get_best_berth_list(ship));
                 set_next_target_berth(ship);

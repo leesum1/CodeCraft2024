@@ -122,16 +122,16 @@ public:
         std::vector<int> berths_id{};
 
         for (int i = 0; i < berths.size(); i++) {
-            if (berth_had_other_ship(ship.id, i)) {
+            if (berth_had_other_ship(ship.id, i) || ship.target_berth_id == i) {
                 continue;
             }
             berths_id.push_back(i);
         }
-        const int remain_time = 15000 - cur_cycle - 10;
+        const int remain_time = 15000 - cur_cycle - 20;
         std::vector<int> best_id_list{};
         double best_weight = -1.0;
         while (std::next_permutation(berths_id.begin(), berths_id.end())) {
-            int remine_capacity = ship_capacity; // 剩余容量
+            int remine_capacity = ship.remain_capacity(); // 剩余容量
             int total_value = 0; // 总价值
             int total_cost = 0; // 总花费
             double select_weight = -1; // 总花费
@@ -163,6 +163,84 @@ public:
                 const bool have_enough_time = (cur_cost + 2) < remain_time;
 
                 if (have_enough_time && (cur_weight_tmp > select_weight)) {
+                    select_weight = cur_weight_tmp;
+                    cur_berths_id_list = Tools::first_n(berths_id, iter_dis + 1);
+                }
+            }
+
+            if (select_weight > best_weight) {
+                best_weight = select_weight;
+                best_id_list = cur_berths_id_list;
+            }
+        }
+
+
+        if (best_id_list.empty()) {
+            log_info("best_id_list is empty");
+            int rand_berth_id = std::rand() % berths.size();
+            return {rand_berth_id};
+        }
+
+        return best_id_list;
+    }
+
+
+    std::vector<int> get_best_berth_list_v2(const Ship& ship) {
+        std::vector<int> berths_id{};
+
+        for (int i = 0; i < berths.size(); i++) {
+            if (berth_had_other_ship(ship.id, i) || ship.target_berth_id == i) {
+                continue;
+            }
+            berths_id.push_back(i);
+        }
+        const int remain_time = 15000 - cur_cycle - 20;
+        const int cur_ship_value = ship.cur_value();
+        const int cur_ship_cycle = ship.start_cycle;
+        const int cur_ship_capacity = ship.remain_capacity();
+        // 计算当前船的性价比，从当前位置直接去交货点的性价比
+        double best_weight = static_cast<double>(cur_ship_value * 100) / (1 + cur_ship_cycle +
+            get_minimum_delivery_point_cost_for_ship(ship.pos).
+            second);
+        std::vector<int> best_id_list{};
+        if (cur_ship_value < 200) {
+            best_weight = -1.0;
+        }
+
+
+        while (std::next_permutation(berths_id.begin(), berths_id.end())) {
+            int remine_capacity = cur_ship_capacity; // 剩余容量
+            int total_value = cur_ship_value; // 总价值
+            int total_cost = cur_ship_cycle; // 总花费
+            double select_weight = -1; // 总花费
+            Point cur_pos = ship.pos; // 当前位置
+            std::vector<int> cur_berths_id_list{};
+            for (const auto& berth_id : berths_id) {
+                // 获取是不是最后一次循环
+                const auto iter_dis = std::distance(berths_id.begin(),
+                                                    std::find(berths_id.begin(), berths_id.end(), berth_id));
+
+                auto& cur_berth = berths[berth_id];
+                const auto [goods_num,goods_value] = cur_berth.goods_first_n(remine_capacity);
+                const int goods_cost = cur_berth.get_load_cost(goods_num);
+                // 去往当前港口的花费
+                const int to_berth_cost = berths_come_from_for_ship[berth_id].get_point_cost(cur_pos).value_or(20000);
+                // 更新当前位置为当前港口位置
+                cur_pos = cur_berth.pos;
+                // 从当前港口到交货点的花费
+                const int to_delivery_cost = get_minimum_delivery_point_cost_for_ship(cur_pos).second;
+                // 减去当前港口的货物
+                remine_capacity -= goods_num;
+                // 更新总价值和总花费
+                total_value += goods_value;
+                total_cost = total_cost + to_berth_cost + goods_cost;
+
+                // 假设从当前港口直接去交货点，计算性价比
+                const int cur_cost = total_cost + to_delivery_cost + 1;
+                const double cur_weight_tmp = static_cast<double>(total_value * 100) / cur_cost;
+                const bool have_enough_time = (cur_cost + 20) < remain_time;
+
+                if (have_enough_time && cur_weight_tmp >= select_weight) {
                     select_weight = cur_weight_tmp;
                     cur_berths_id_list = Tools::first_n(berths_id, iter_dis + 1);
                 }

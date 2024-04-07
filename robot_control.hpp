@@ -533,13 +533,14 @@ public:
                   P_ARG(target_goods.pos));
         // 更改货物状态
         robot.target_goods.status = GoodsStatus::Got;
+        io_layer->map_goods_list.at(target_goods.pos).status = GoodsStatus::Got;
         robot.will_goods_in_this_cycle = true;
       }
     }
   }
 
   // 机器人卸货
-  void robots_pull_goods(Robot& robot) {
+  void robots_pull_goods(Robot& robot) const {
     const auto& next_pos = robot.get_next_pos();
     auto& cur_berth = io_layer->berths[robot.target_berth_id];
     const auto& target_goods = robot.target_goods;

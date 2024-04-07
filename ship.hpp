@@ -593,7 +593,11 @@ public:
 
     bool empty() const { return this->goods_list.empty(); }
 
-    int remain_capacity() const { return this->capacity - this->goods_list.size(); }
+    int remain_capacity() const {
+        const int ret = this->capacity - this->goods_list.size();
+        log_assert(ret >= 0, "remain_capacity is less than 0, %d", ret);
+        return ret;
+    }
 
     explicit Ship(const int id, const int cur_capacity, const int max_capacity, const Point& pos,
                   const Direction::Direction direction, const int status, const int start_cycle)

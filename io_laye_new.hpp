@@ -486,7 +486,11 @@ public:
         for (auto& robot : robots) {
             robot.printf_goods_statistic();
         }
+        for (auto& robot : robots) {
+            log_info("robot[%d] collision_cycle:%d", robot.id, robot.collision_cycle);
+        }
         statistic.goods_statistic();
+
         fprintf(stderr,
                 "total_goods_num:%zu,total_goods_money:%d,goted_goods_num:%zu,"
                 "goted_goods_money:%d,selled_goods_num:%zu,selled_goods_money:%d\n",

@@ -8,12 +8,34 @@
 #include <optional>
 #include <vector>
 
+#include "tree_map.hpp"
+
 class RobotCollisionAvoid {
   IoLayerNew* io_layer = nullptr;
+  // first: 子节点 high_priority_robot_id, second: 父节点 low_priority_robot_id
+  std::vector<std::pair<int, int>> collision_pair_list{};
 
 public:
   explicit RobotCollisionAvoid(IoLayerNew* io_layer) : io_layer(io_layer) {}
   ~RobotCollisionAvoid() = default;
+
+  void check_collision_pair() {
+    // key: 子节点 high_priority_robot_id, val: 父节点 low_priority_robot_id
+    std::unordered_map<int, int> collision_pair_filter{};
+    for (const auto collision_pair : collision_pair_list) {
+      if (Point::is_stop_point(io_layer->robots.at(collision_pair.second).get_next_pos())) {
+        collision_pair_filter[collision_pair.first] = collision_pair.second;
+      }
+    }
+    auto tree_map = TreeMap(collision_pair_filter);
+    int cur_priority = 0;
+    tree_map.trees_bfs_for_each([&](const TreeMap::TreeNode* node) {
+        io_layer->robots.at(node->id).priority = cur_priority++;
+        log_trace("robot_id[%d] priority change to %d", node->id, io_layer->robots.at(node->id).priority);
+      }
+    );
+    collision_pair_list.clear();
+  }
 
   /**
    * @brief 高优先级机器人的下一步位置是否与低优先级机器人当前位置发生碰撞
@@ -126,7 +148,7 @@ public:
   }
 
 
-  void collision_avoid_step1(const int robot_id) const {
+  void collision_avoid_step1(const int robot_id) {
     const auto& robot_next_pos_before =
       io_layer->robots.at(robot_id).get_next_pos();
     const auto& robot_cur_pos = io_layer->robots.at(robot_id).pos;
@@ -150,7 +172,7 @@ public:
       // 1. 低优先级机器人需要让出位置
       log_trace("robot_id:%d low_next_pos2high_next_pos_collision_id:%d",
                 robot_id, low_next_pos2high_next_pos_collision_id.value());
-
+      cur_robot.collision_cycle++;
       bool cut_success = false;
       auto cut_come_from = PATHHelper::cut_path(
         robot_cur_pos, io_layer->get_is_barrier_for_robot_lambda(robot_id, true, true, false),
@@ -178,6 +200,7 @@ public:
     auto low_next_pos2high_cur_pos_collision_id =
       low_next_pos2high_cur_pos_collision(robot_id);
     if (low_next_pos2high_cur_pos_collision_id.has_value()) {
+      cur_robot.collision_cycle++;
       // 2. 低优先级机器人需要让出位置
       log_trace("robot_id:%d low_next_pos2high_cur_pos_collision_id:%d",
                 robot_id, low_next_pos2high_cur_pos_collision_id.value());
@@ -210,12 +233,14 @@ public:
     if (high_next_pos2low_cur_pos_collision_id.has_value()) {
       log_trace("robot_id:%d high_next_pos2low_cur_pos_collision_id:%d",
                 robot_id, high_next_pos2low_cur_pos_collision_id.value());
+      cur_robot.collision_cycle++;
+      collision_pair_list.emplace_back(robot_id, high_next_pos2low_cur_pos_collision_id.value());
       // 停止移动
       cur_robot.set_final_next_pos(invalid_point);
     }
 
     // 4. 高优先级机器人的下一步位置是否与低优先级机器人的下一步位置发生碰撞
-    auto high_next_pos2low_next_pos_collision_id =
+    const auto high_next_pos2low_next_pos_collision_id =
       high_next_pos2low_next_pos_collision(robot_id);
     if (high_next_pos2low_next_pos_collision_id.has_value()) {
       // 继续执行,不做处理
@@ -236,8 +261,8 @@ public:
                       const std::vector<Point>& avoid_points,
                       const std::function<void()>& fail_callback) const {
     auto& cur_robot = io_layer->robots.at(robot_id);
-    auto bt_point = PATHHelper::get_bt_point(
-      cur_robot.pos, come_from, io_layer->get_is_barrier_for_robot_lambda(robot_id, true, false, false),
+    const auto bt_point = PATHHelper::get_bt_point(
+      cur_robot.pos, come_from, io_layer->get_is_barrier_for_robot_lambda(robot_id, true, true, false),
       avoid_points);
     if (!bt_point.has_value()) {
       log_trace("robot_id:%d fallback_to_bt_path failed", robot_id);

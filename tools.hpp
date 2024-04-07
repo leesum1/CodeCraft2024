@@ -8,7 +8,8 @@
 #include <vector>
 
 namespace Tools {
-  inline int random(const int min, const int max) {
+  template <typename T>
+  T random(const T min, const T max) {
     static std::mt19937 gen((unsigned int)time(nullptr));
     std::uniform_int_distribution dis(min, max);
     return dis(gen);

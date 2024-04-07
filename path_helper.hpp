@@ -367,7 +367,7 @@ public:
     for (const auto& pair : come_from) {
       const auto& point_cost = pair.second;
 
-      if (is_barrier(point_cost.pos) || point_cost.pos == cur_pos) {
+      if (point_cost.pos == cur_pos || is_barrier(point_cost.pos)) {
         continue;
       }
       if (std::any_of(avoid_points.begin(), avoid_points.end(),

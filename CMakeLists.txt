@@ -23,4 +23,5 @@ if (!WIN32)
 endif (!WIN32)
 
 AUX_SOURCE_DIRECTORY(. src)
-ADD_EXECUTABLE(main ${src})
+ADD_EXECUTABLE(main ${src}
+        tree_map.hpp)

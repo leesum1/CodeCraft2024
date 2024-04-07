@@ -131,7 +131,7 @@ struct PointCost {
   PointCost() {};
   PointCost(Point pos, int cost) : pos(pos), cost(cost) {}
 
-  friend bool operator<(PointCost f1, PointCost f2) {
+  friend bool operator<(const PointCost f1, const PointCost f2) {
     return f1.cost > f2.cost;
   }
 };

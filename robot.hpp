@@ -23,7 +23,9 @@ public:
   bool will_goods_in_this_cycle = false; // 本周期是否拿货
   bool has_pass_collision_check = false; // 是否已经通过碰撞检测
   Goods target_goods = invalid_goods; // 机器人目标货物
+  int priority = 0; // 机器人优先级
   int idle_cycle = 0;
+  int collision_cycle = 0;
   int goted_goods_count = 0;
   int goted_goods_value = 0;
 

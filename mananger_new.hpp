@@ -46,6 +46,11 @@ public:
     void goods_list_cycle() {
         // 将新货物添加到货物列表中
         for (auto& i : io_layer.new_goods_list) {
+            const auto [_,mini_cost] = io_layer.get_minimum_berth_cost(i.pos);
+            // 无法到达的货物不添加到货物列表中
+            if (mini_cost > 20000) {
+                continue;
+            }
             io_layer.map_goods_list[i.pos] = i;
             log_assert(i.pos != invalid_point, "invalid goods");
         }
@@ -139,6 +144,34 @@ public:
         // }
     }
 
+    void buy_robot_and_ship() {
+        int expect_robot_num;
+        int expect_ship_num = 2;
+        if (io_layer.berths_come_from_for_robot[0].map_size() < 25000) {
+            expect_robot_num = 14;
+        }
+        else {
+            expect_robot_num = 18;
+        }
+
+
+        if (io_layer.robots.size() < expect_robot_num && io_layer.cur_money > io_layer.robot_price) {
+            const auto rand_robot_shop = io_layer.robot_shops.at(Tools::random(0ul, io_layer.robot_shops.size() - 1));
+            io_layer.robot_lbot(rand_robot_shop);
+        }
+        if (io_layer.cur_cycle == 1) {
+            io_layer.ship_lboat(io_layer.ship_shops.back());
+        }
+        if (io_layer.ships.size() < expect_ship_num && io_layer.cur_money > io_layer.ship_price &&
+            io_layer.robots.size() == expect_robot_num) {
+            if (io_layer.statistic.goted_goods_count() - io_layer.statistic.selled_goods_count() >
+                io_layer.ship_capacity * (io_layer.ships.size() + 2)) {
+                const auto rand_ship_shop = io_layer.ship_shops.at(Tools::random(0ul, io_layer.ship_shops.size() - 1));
+                io_layer.ship_lboat(rand_ship_shop);
+            }
+        }
+    }
+
     void run_game() {
         for (int zhen = 1; zhen <= 15000; zhen++) {
             io_layer.input_cycle();
@@ -146,55 +179,35 @@ public:
             // 更新货物信息
             goods_list_cycle();
 
-
-            int expect_robot_num;
-            int expect_ship_num = 2;
-            if (io_layer.berths_come_from_for_robot[0].map_size() < 25000) {
-                expect_robot_num = 14;
-            }
-            else {
-                expect_robot_num = 18;
-            }
-
-
-            if (io_layer.robots.size() < expect_robot_num && io_layer.cur_money > io_layer.robot_price) {
-                const auto rand_robot_shop = io_layer.robot_shops.at(std::rand() % io_layer.robot_shops.size());
-                io_layer.robot_lbot(rand_robot_shop);
-            }
-            if (zhen == 1) {
-                io_layer.ship_lboat(io_layer.ship_shops.back());
-            }
-            if (io_layer.ships.size() < expect_ship_num && io_layer.cur_money > io_layer.ship_price &&
-                io_layer.robots.size() == expect_robot_num) {
-                if (io_layer.statistic.goted_goods_count() - io_layer.statistic.selled_goods_count() >
-                    io_layer.ship_capacity * 3) {
-                    const auto rand_ship_shop = io_layer.ship_shops.at(std::rand() % io_layer.ship_shops.size());
-                    io_layer.ship_lboat(rand_ship_shop);
-                }
-            }
-
-
+            buy_robot_and_ship();
             for (auto& robot : io_layer.robots) {
                 robot.clear_flags();
             }
 
 
-            auto start = std::chrono::high_resolution_clock::now();
             for (auto& robot : io_layer.robots) {
                 robot_control.robot_get_goods(robot);
                 robot_control.find_new_goods(robot, get_goods_strategy_lambda(robot.id));
                 robot_control.go_near_berth(robot);
             }
-            auto end = std::chrono::high_resolution_clock::now();
-            log_info("robot move time:%d", std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
-            start = std::chrono::high_resolution_clock::now();
 
-            for (auto& robot : io_layer.robots) {
+            // 创建节点索引数组
+            std::vector<size_t> indices(io_layer.robots.size());
+            for (size_t i = 0; i < io_layer.robots.size(); ++i) {
+                indices[i] = i;
+            }
+
+            // 按照节点值的大小顺序排序索引数组，而不改变原始节点的顺序
+            std::sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {
+                return io_layer.robots[a].priority < io_layer.robots[b].priority;
+            });
+
+            for (size_t i : indices) {
+                auto& robot = io_layer.robots[i];
                 robot_collision_avoid.collision_avoid_step1(robot.id);
             }
-            end = std::chrono::high_resolution_clock::now();
-            log_info("collision avoid step1 time:%d",
-                     std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+            robot_collision_avoid.check_collision_pair();
+
 
             for (auto& robot : io_layer.robots) {
                 robot_control.robots_move(robot);

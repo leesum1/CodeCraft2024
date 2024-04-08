@@ -46,6 +46,9 @@ public:
         }
         q.pop();
         for (auto& next : neighbors(cur)) {
+          if(next.x < 0 || next.y < 0 || next.x >= 200 || next.y >= 200){
+            log_fatal("next.x:%d,next.y:%d",next.x,next.y);
+          }
           if (visited[next.x][next.y] || is_barrier(next)) {
             continue;
           }

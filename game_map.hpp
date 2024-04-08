@@ -153,7 +153,7 @@ public:
     for (int i = 0; i < 4; i++) {
       const int nx = pos.x + directions[i].first;
       const int ny = pos.y + directions[i].second;
-      if (is_valid_pos(pos) && !is_barrier_for_ship(pos)) {
+      if (is_valid_pos({nx,ny}) && !is_barrier_for_ship({nx,ny})) {
         result.emplace_back(nx, ny);
       }
     }
@@ -170,7 +170,7 @@ public:
     for (int i = 0; i < 4; i++) {
       const int nx = pos.x + directions[i].first;
       const int ny = pos.y + directions[i].second;
-      if (is_valid_pos(pos) && !is_barrier_for_robot(pos)) {
+      if (is_valid_pos({nx,ny}) && !is_barrier_for_robot({nx,ny})) {
         result.emplace_back(nx, ny);
       }
     }

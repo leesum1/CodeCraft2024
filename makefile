@@ -19,12 +19,14 @@ all:
 
 
 run:all
+	sed -i 's/^\/\/#define LOG_ENABLE/#define LOG_ENABLE/' config.h
 	$(JUGDE_PROG) -s $(RAND_SEED)   -m $(MAP_PATH)/$(MAP_SEL)  $(TARGET)
 
 test:all
 	$(TARGET)
 
 zip:
+	sed -i 's/^#define LOG_ENABLE/\/\/#define LOG_ENABLE/' config.h
 	if [ -f "log.txt" ]; then rm log.txt; fi
 	zip zip/$(ZIP_NAME)  *
 

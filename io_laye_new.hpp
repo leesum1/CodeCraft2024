@@ -285,7 +285,7 @@ public:
                 const int berth_id_a = berths_id[i];
                 const int berth_id_b = berths_id[i + 1];
                 // 获取 a 到 b 的距离
-                const int distance = berths_come_from_for_ship[berth_id_a]
+                const int distance = berths_come_from_for_ship.at(berth_id_a)
                                      .get_point_cost(berths[berth_id_b].pos)
                                      .value();
                 dis_sum += distance;
@@ -568,7 +568,8 @@ public:
             log_info("robot[%d] collision_cycle:%d", robot.id, robot.collision_cycle);
         }
         statistic.goods_statistic();
-
+        fprintf(stderr, "{\"robot_num\":%lu,\"ship_num\":%lu,\"ship_capacity\":%d}\n", robots.size(),
+                ships.size(), ship_capacity);
         fprintf(stderr,
                 "total_goods_num:%zu,total_goods_money:%d,goted_goods_num:%zu,"
                 "goted_goods_money:%d,selled_goods_num:%zu,selled_goods_money:%d\n",
@@ -605,17 +606,18 @@ public:
         for (int i = 0; i < berths.size(); i++) {
             game_map.rand_neighber_again();
 
-            const Point& start1 = Point(berths[i].pos.x, berths[i].pos.y);
-
+            // 对于机器人来说，使用 berth_area 来进行打表
+            const auto& start = berths[i].berth_area;
             berths_come_from_for_robot.emplace_back();
             berths_come_from_for_robot.back().init(
-                "berth[" + std::to_string(i) + "]_come_from_for_robot", start1,
+                "berth[" + std::to_string(i) + "]_come_from_for_robot", start,
                 is_barrier_for_robot, is_neighbors_for_robot,
                 PATHHelper::default_cost);
 
+            // 对于轮船来说，使用中心点 berths[i].pos 来进行打表
             berths_come_from_for_ship.emplace_back();
             berths_come_from_for_ship.back().init(
-                "berth[" + std::to_string(i) + "]_come_from_for_ship", start1,
+                "berth[" + std::to_string(i) + "]_come_from_for_ship", berths[i].pos,
                 is_barrier_for_ship, is_neighbor_for_ship, ship_cost);
         }
 

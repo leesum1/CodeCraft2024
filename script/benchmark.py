@@ -47,8 +47,29 @@ def parse_score_from_stderr(stderr):
         except json.JSONDecodeError:
             # 如果当前行不能被解析为JSON，继续下一行
             continue
-
     return 0
+
+
+def parse_map_info_from_stderr(stderr):
+    lines = stderr.split('\n')
+    robot_num = 0
+    ship_num = 0
+    ship_capacity = 0
+    for line in lines:
+        try:
+            # 尝试将每一行解析为JSON
+            data = json.loads(line)
+        # "{robot_num:%lu,ship_num:%lu,ship_capacity:%d}\n"
+            if data.get("robot_num") != None:
+                robot_num = data.get("robot_num")
+            if data.get("ship_num") != None:
+                ship_num = data.get("ship_num")
+            if data.get("ship_capacity") != None:
+                ship_capacity = data.get("ship_capacity")
+        except json.JSONDecodeError:
+            # 如果当前行不能被解析为JSON，继续下一行
+            continue
+    return f"robot_num:{robot_num},ship_num:{ship_num},ship_capacity:{ship_capacity}"
 
 
 # 定义一个函数来运行命令并返回输出
@@ -67,15 +88,24 @@ def run_command(cmd: str):
 if __name__ == '__main__':
     rm_replay_dir()
     target_program = os.path.join(HOME_PATH, 'build', 'main')
-    test_cmds = [get_preliminary_command(os.path.join(HOME_PATH, map_path), 1421323, target_program) for map_path in
+    # 721423:82
+    # 1421323:56
+    test_cmds = [get_preliminary_command(os.path.join(HOME_PATH, map_path), 721423, target_program) for map_path in
                  semi_maps_list]
+
+    # 将 config.h 中的 #define LOG_ENABLE 注释掉，使用 Linux 工具
+    run_command(f"sed -i 's/^#define LOG_ENABLE/\/\/#define LOG_ENABLE/' {HOME_PATH}/config.h")
+    run_command(f'make -C {HOME_PATH}')
+    # 恢复 config.h 中的 #define LOG_ENABLE 注释，使用 Linux 工具
+    run_command(f"sed -i 's/^\/\/#define LOG_ENABLE/#define LOG_ENABLE/' {HOME_PATH}/config.h")
+
+
 
     repeat_size = 5
     # 创建一个新的命令列表，其中每个命令都重复 5 次
     test_cmds_repeated = [cmd for cmd in test_cmds for _ in range(repeat_size)]
     semi_maps_list_repeated = [
         map_path for map_path in semi_maps_list for _ in range(repeat_size)]
-    run_command(f'make -C {HOME_PATH}')
     start_time = time.time()
     # 使用ThreadPoolExecutor并行运行所有命令
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
@@ -87,17 +117,19 @@ if __name__ == '__main__':
     scores_min_dict = {}
     scores_sum_dict = {}
     counts_dict = {}
-
+    map_info_dict = {}
     # 打印所有命令的结果
     for map, result in zip(semi_maps_list_repeated, results):
         stdout, stderr = result
         score = parse_score_from_stderr(stdout.decode('utf-8'))
+        map_info = parse_map_info_from_stderr(stderr.decode('utf-8'))
 
         # 取最高分,最低分，平均分
         if scores_max_dict.get(map) == None and score != 0:
             scores_max_dict[map] = score
             scores_min_dict[map] = score
             scores_sum_dict[map] = score
+            map_info_dict[map] = map_info
             counts_dict[map] = 1
         elif score != 0:
             scores_max_dict[map] = max(scores_max_dict[map], score)
@@ -105,6 +137,8 @@ if __name__ == '__main__':
             scores_sum_dict[map] += score
             counts_dict[map] += 1
 
+    for map, map_info in map_info_dict.items():
+        print(f"{map} : {map_info}")
     print("Max score")
     for map, score in scores_max_dict.items():
         print(f"{map} : {score}")

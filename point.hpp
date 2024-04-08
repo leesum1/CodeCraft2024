@@ -76,6 +76,11 @@ struct Area {
 
   Area() : left_top(Point(-1, -1)), right_bottom(Point(-1, -1)) {}
 
+  int width() const { return right_bottom.y - left_top.y + 1; }
+  int height() const { return right_bottom.x - left_top.x + 1; }
+  Point left_bottom() const { return Point(right_bottom.x, left_top.y); }
+  Point right_top() const { return Point(left_top.x, right_bottom.y); }
+
   std::string to_string() const {
     return std::string("left_top:") + std::to_string(left_top.x) + "," +
       std::to_string(left_top.y) +

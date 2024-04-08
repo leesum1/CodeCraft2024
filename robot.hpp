@@ -5,7 +5,6 @@
 #include <vector>
 
 class Robot {
-private:
   Point next_pos_final = invalid_point; // 下下次移动的位置
   bool next_pos_final_is_valid = false;
 
@@ -70,9 +69,6 @@ public:
     next_pos_before_collision_check = invalid_point;
   }
 
-  bool target_berth_is_valid() {
-    return target_berth_id >= 0 && target_berth_id < 10;
-  }
 
   void book_new_goods(const Goods& goods, const std::vector<Point>& path) {
     target_goods = goods;
@@ -86,5 +82,5 @@ public:
     next_pos_before_collision_check = path_list.back();
   }
 
-  ~Robot() {}
+  ~Robot() = default;
 };

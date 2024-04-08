@@ -70,10 +70,11 @@ public:
    * @return int 计算后的比重,越大越好
    */
   static int goods_strategy_quality_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
+    // 最大值200
     if (only_care_robot_distance) {
-      return goods_info.value * 100 / (goods_info.distance_to_robot + 1);
+      return 100 * goods_info.value / (goods_info.distance_to_robot + 1);
     }
-    return goods_info.value * 100 / (goods_info.distance_to_robot + goods_info.distance_to_berth + 1);
+    return 100 * goods_info.value / (goods_info.distance_to_robot + goods_info.distance_to_berth + 1);
   }
 
 
@@ -136,13 +137,20 @@ public:
     // x:97,y:85.685939
     // x:98,y:90.583035
     // x:99,y:95.529142
-    if (value_sig < 60) {
-      return 0;
+    if (value_sig < 90) {
+      // 90 以下
+      if (goods_info.remain_time > 200) {
+        return 4 * goods_strategy_quality_first(goods_info, false);
+      }
+      if (goods_info.remain_time > 100 && goods_info.remain_time <= 200) {
+        return 5 * goods_strategy_quality_first(goods_info, false);
+      }
+      return 6 * goods_strategy_quality_first(goods_info, false);
     }
     // 最大值为150,确保低价值不会被选中
     const int remine_time_val = 150 - goods_info.remain_time / 2;
     // 给一个乘数,确保选择剩余时间少的货物
-    return (remine_time_val + static_cast<int>(value_sig)) * 2000;
+    return (remine_time_val + static_cast<int>(value_sig)) * 30000 / goods_info.distance_to_robot;
   }
 
 

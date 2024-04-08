@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include "berth.hpp"
 #include "come_from_map.hpp"
 #include "direction.hpp"
@@ -11,7 +12,6 @@
 #include "robot.hpp"
 #include "ship.hpp"
 #include "statistic.hpp"
-#include <algorithm>
 
 #include <chrono>
 #include <cmath>
@@ -19,12 +19,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <optional>
-#include <cstdio>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include <iostream>
 
 #include "tools.hpp"
 
@@ -113,7 +112,7 @@ public:
 
     int calc_delivery_point_id(const int id) const {
         const int id_by_offset = id - delivery_id_offset;
-        log_assert(id_by_offset<delivery_points.size(), "delivery_points size:%d, cur_id:%d", delivery_points.size(),
+        log_assert(id_by_offset < delivery_points.size(), "delivery_points size:%d, cur_id:%d", delivery_points.size(),
                    id_by_offset);
         return id_by_offset;
     }
@@ -139,11 +138,11 @@ public:
             std::vector<int> cur_berths_id_list{};
             for (const auto& berth_id : berths_id) {
                 // 获取是不是最后一次循环
-                const auto iter_dis = std::distance(berths_id.begin(),
-                                                    std::find(berths_id.begin(), berths_id.end(), berth_id));
+                const auto iter_dis =
+                    std::distance(berths_id.begin(), std::find(berths_id.begin(), berths_id.end(), berth_id));
 
                 auto& cur_berth = berths[berth_id];
-                const auto [goods_num,goods_value] = cur_berth.goods_first_n(remine_capacity);
+                const auto [goods_num, goods_value] = cur_berth.goods_first_n(remine_capacity);
                 const int goods_cost = cur_berth.get_load_cost(goods_num);
                 // 去往当前港口的花费
                 const int to_berth_cost = berths_come_from_for_ship[berth_id].get_point_cost(cur_pos).value_or(20000);
@@ -177,7 +176,7 @@ public:
 
         if (best_id_list.empty()) {
             log_info("best_id_list is empty");
-            int rand_berth_id = std::rand() % berths.size();
+            int rand_berth_id = Tools::random(0ul, berths.size() - 1);
             return {rand_berth_id};
         }
 
@@ -224,7 +223,8 @@ public:
     //             const auto [goods_num,goods_value] = cur_berth.goods_first_n(remine_capacity);
     //             const int goods_cost = cur_berth.get_load_cost(goods_num);
     //             // 去往当前港口的花费
-    //             const int to_berth_cost = berths_come_from_for_ship[berth_id].get_point_cost(cur_pos).value_or(20000);
+    //             const int to_berth_cost =
+    //             berths_come_from_for_ship[berth_id].get_point_cost(cur_pos).value_or(20000);
     //             // 更新当前位置为当前港口位置
     //             cur_pos = cur_berth.pos;
     //             // 从当前港口到交货点的花费
@@ -273,10 +273,10 @@ public:
             int dis_sum = 0;
             const int first_berth_id = berths_id[0];
             const int last_berth_id = berths_id[berths_id.size() - 1];
-            const auto [to_delivery_id ,to_delivery_dis] = get_minimum_delivery_point_cost_for_ship(
-                berths[first_berth_id].pos);
-            const auto [from_delivery_id,from_delivery_dis] = get_minimum_delivery_point_cost_for_ship(
-                berths[last_berth_id].pos);
+            const auto [to_delivery_id, to_delivery_dis] =
+                get_minimum_delivery_point_cost_for_ship(berths[first_berth_id].pos);
+            const auto [from_delivery_id, from_delivery_dis] =
+                get_minimum_delivery_point_cost_for_ship(berths[last_berth_id].pos);
             dis_sum += to_delivery_dis;
             dis_sum += from_delivery_dis;
 
@@ -285,9 +285,8 @@ public:
                 const int berth_id_a = berths_id[i];
                 const int berth_id_b = berths_id[i + 1];
                 // 获取 a 到 b 的距离
-                const int distance = berths_come_from_for_ship.at(berth_id_a)
-                                     .get_point_cost(berths[berth_id_b].pos)
-                                     .value();
+                const int distance =
+                    berths_come_from_for_ship.at(berth_id_a).get_point_cost(berths[berth_id_b].pos).value();
                 dis_sum += distance;
             }
             std::vector<int> v_tmp{};
@@ -298,20 +297,20 @@ public:
             v_tmp.emplace_back(from_delivery_id + 10);
             res.emplace_back(v_tmp, dis_sum);
         }
-        std::sort(res.begin(), res.end(), [](const std::pair<std::vector<int>, int>& a,
-                                             const std::pair<std::vector<int>, int>& b) {
-            return a.second < b.second;
-        });
+        std::sort(res.begin(), res.end(),
+                  [](const std::pair<std::vector<int>, int>& a, const std::pair<std::vector<int>, int>& b) {
+                      return a.second < b.second;
+                  });
 
         for (auto& _ : delivery_points) {
             delivery_points_berth_loop.emplace_back();
         }
 
         log_assert(delivery_points_berth_loop.size() == delivery_points.size(),
-                   "delivery_points_berth_loop size:%d, delivery_points size:%d",
-                   delivery_points_berth_loop.size(), delivery_points.size());
+                   "delivery_points_berth_loop size:%d, delivery_points size:%d", delivery_points_berth_loop.size(),
+                   delivery_points.size());
         int mini_path_size = 999999;
-        for (auto& [loop_point_id_list,path_size] : res) {
+        for (auto& [loop_point_id_list, path_size] : res) {
             if (path_size <= mini_path_size) {
                 mini_path_size = path_size;
                 const int delivery_id = calc_delivery_point_id(loop_point_id_list[0]);
@@ -328,9 +327,7 @@ public:
 
 
         auto etime = std::chrono::high_resolution_clock::now();
-        log_info("time:%d ms",
-                 std::chrono::duration_cast<std::chrono::milliseconds>(etime - stime)
-                 .count());
+        log_info("time:%d ms", std::chrono::duration_cast<std::chrono::milliseconds>(etime - stime).count());
     }
 
 
@@ -343,10 +340,10 @@ public:
      * @param only_care_cur_pos 是否只关心当前位置
      * @return auto
      */
-    auto get_is_barrier_for_robot_lambda(const int robot_id, bool only_care_high_priority,
-                                         bool only_care_neighbor, bool only_care_cur_pos) {
-        auto is_barrier_func = [this, robot_id, only_care_high_priority,
-                only_care_neighbor, only_care_cur_pos](const Point& p) {
+    auto get_is_barrier_for_robot_lambda(const int robot_id, bool only_care_high_priority, bool only_care_neighbor,
+                                         bool only_care_cur_pos) {
+        auto is_barrier_func = [this, robot_id, only_care_high_priority, only_care_neighbor,
+                only_care_cur_pos](const Point& p) {
             bool is_barrier1 = game_map.is_barrier_for_robot(p);
             bool is_barrier2 = false;
             bool is_barrier3 = false;
@@ -381,19 +378,17 @@ public:
 
     auto get_find_neighbor_for_robot_lambda() {
         game_map.rand_neighber_again();
-        auto find_neighbor_func = [&](const Point& p) {
-            return game_map.neighbors_for_robot(p);
-        };
+        auto find_neighbor_func = [&](const Point& p) { return game_map.neighbors_for_robot(p); };
         return find_neighbor_func;
     }
 
     /**
- * @brief 获取是否是船的障碍物的lambda函数
- * @param ship_id 船的id
- * @param care_other_ship_cur_pos 是否关心其他船的当前位置
- * @param care_other_ship_next_pos 是否关心其他船的下一个位置
- * @return
- */
+     * @brief 获取是否是船的障碍物的lambda函数
+     * @param ship_id 船的id
+     * @param care_other_ship_cur_pos 是否关心其他船的当前位置
+     * @param care_other_ship_next_pos 是否关心其他船的下一个位置
+     * @return
+     */
     auto get_is_barrier_for_ship_lambda(const int ship_id, bool care_other_ship_cur_pos,
                                         bool care_other_ship_next_pos) {
         auto is_barrier_func = [ship_id, care_other_ship_cur_pos, care_other_ship_next_pos, this](const Point& p) {
@@ -444,8 +439,7 @@ public:
             }
             if (!berths[berth_id].is_baned) {
                 bool in_final_berth =
-                    std::any_of(final_berth.begin(), final_berth.end(),
-                                [berth_id](int v) { return v == berth_id; });
+                    std::any_of(final_berth.begin(), final_berth.end(), [berth_id](int v) { return v == berth_id; });
                 return !in_final_berth;
             }
             return true;
@@ -454,7 +448,7 @@ public:
         return (berths[berth_id].is_baned || berths[berth_id].tmp_baned);
     }
 
-    int total_goods_avg_money() {
+    int total_goods_avg_money() const {
         if (total_goods_num == 0) {
             return 0;
         }
@@ -506,7 +500,7 @@ public:
      */
     std::pair<int, int> get_minimum_delivery_point_cost_for_ship(const Point& p) {
         int min_cost = 999999;
-        int min_delivery_point_id = std::rand() % delivery_points.size();
+        int min_delivery_point_id = Tools::random(0ul, delivery_points.size() - 1);
         for (int i = 0; i < delivery_points.size(); i++) {
             auto cur_cost = delivery_point_come_from[i].get_point_cost(p);
             if (cur_cost.has_value()) {
@@ -538,8 +532,7 @@ public:
 
     void print_goods_info() {
         for (auto& berth : berths) {
-            log_info("cur_goods_num:%d,cur_goods_value:%d", berth.goods_num(),
-                     berth.goods_value());
+            log_info("cur_goods_num:%d,cur_goods_value:%d", berth.goods_num(), berth.goods_value());
         }
         // log_info("total_goods_num:%d,total_goods_money:%d,goted_goods_num:%d,"
         //          "goted_goods_money:%d,selled_goods_num:%d,selled_goods_money:%d",
@@ -568,30 +561,21 @@ public:
             log_info("robot[%d] collision_cycle:%d", robot.id, robot.collision_cycle);
         }
         statistic.goods_statistic();
-        fprintf(stderr, "{\"robot_num\":%lu,\"ship_num\":%lu,\"ship_capacity\":%d}\n", robots.size(),
-                ships.size(), ship_capacity);
         fprintf(stderr,
-                "total_goods_num:%zu,total_goods_money:%d,goted_goods_num:%zu,"
-                "goted_goods_money:%d,selled_goods_num:%zu,selled_goods_money:%d\n",
-                statistic.totol_goods_list.size(), statistic.total_goods_value(),
-                statistic.goted_goods_list.size(), statistic.goted_goods_value(),
-                statistic.selled_goods_list.size(), statistic.selled_goods_value());
+                "{\"robot_num\":%lu,\"ship_num\":%lu,\"ship_capacity\":%d,\"total_goods_money\":%d,"
+                "\"goted_goods_money\":%d,\"selled_goods_money\":%d,\"total_goods_num\":%d,"
+                "\"goted_goods_num\":%d,\"selled_goods_num\":%d}\n",
+                robots.size(), ships.size(), ship_capacity, statistic.total_goods_value(),
+                statistic.goted_goods_value(), statistic.selled_goods_value(), statistic.total_goods_count(),
+                statistic.goted_goods_count(), statistic.selled_goods_count());
     }
 
     void all_come_from_init() {
-        auto is_barrier_for_robot = [&](const Point& p) {
-            return game_map.is_barrier_for_robot(p);
-        };
-        auto is_neighbors_for_robot = [&](const Point& p) {
-            return game_map.neighbors_for_robot(p);
-        };
+        auto is_barrier_for_robot = [&](const Point& p) { return game_map.is_barrier_for_robot(p); };
+        auto is_neighbors_for_robot = [&](const Point& p) { return game_map.neighbors_for_robot(p); };
 
-        auto is_barrier_for_ship = [&](const Point& p) {
-            return game_map.is_barrier_for_ship(p);
-        };
-        auto is_neighbor_for_ship = [&](const Point& p) {
-            return game_map.neighbors_for_ship(p);
-        };
+        auto is_barrier_for_ship = [&](const Point& p) { return game_map.is_barrier_for_ship(p); };
+        auto is_neighbor_for_ship = [&](const Point& p) { return game_map.neighbors_for_ship(p); };
 
         // 主航道（非碰撞区域）的花费为 2
         auto ship_cost = [&](const Point& p) {
@@ -609,35 +593,30 @@ public:
             // 对于机器人来说，使用 berth_area 来进行打表
             const auto& start = berths[i].berth_area;
             berths_come_from_for_robot.emplace_back();
-            berths_come_from_for_robot.back().init(
-                "berth[" + std::to_string(i) + "]_come_from_for_robot", start,
-                is_barrier_for_robot, is_neighbors_for_robot,
-                PATHHelper::default_cost);
+            berths_come_from_for_robot.back().init("berth[" + std::to_string(i) + "]_come_from_for_robot", start,
+                                                   is_barrier_for_robot, is_neighbors_for_robot,
+                                                   PATHHelper::default_cost);
 
             // 对于轮船来说，使用中心点 berths[i].pos 来进行打表
             berths_come_from_for_ship.emplace_back();
-            berths_come_from_for_ship.back().init(
-                "berth[" + std::to_string(i) + "]_come_from_for_ship", berths[i].pos,
-                is_barrier_for_ship, is_neighbor_for_ship, ship_cost);
+            berths_come_from_for_ship.back().init("berth[" + std::to_string(i) + "]_come_from_for_ship", berths[i].pos,
+                                                  is_barrier_for_ship, is_neighbor_for_ship, ship_cost);
         }
 
         for (int i = 0; i < robot_shops.size(); i++) {
             game_map.rand_neighber_again();
             const Point& start1 = robot_shops[i];
             robot_shops_come_from.emplace_back();
-            robot_shops_come_from.back().init(
-                "robot_shop[" + std::to_string(i) + "]_come_from", start1,
-                is_barrier_for_robot, is_neighbors_for_robot,
-                PATHHelper::default_cost);
+            robot_shops_come_from.back().init("robot_shop[" + std::to_string(i) + "]_come_from", start1,
+                                              is_barrier_for_robot, is_neighbors_for_robot, PATHHelper::default_cost);
         }
 
         for (int i = 0; i < delivery_points.size(); i++) {
             game_map.rand_neighber_again();
             const Point& start1 = delivery_points.at(i);
-            delivery_point_come_from.emplace_back(ComeFromMap());
-            delivery_point_come_from.back().init(
-                "delivery_point[" + std::to_string(i) + "]_come_from", start1,
-                is_barrier_for_ship, is_neighbor_for_ship, ship_cost);
+            delivery_point_come_from.emplace_back();
+            delivery_point_come_from.back().init("delivery_point[" + std::to_string(i) + "]_come_from", start1,
+                                                 is_barrier_for_ship, is_neighbor_for_ship, ship_cost);
         }
     }
 
@@ -646,13 +625,10 @@ public:
      *
      */
     void map_process() {
-        std::chrono::high_resolution_clock::time_point start =
-            std::chrono::high_resolution_clock::now();
+        std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
         auto update_berth_area_info = [&](Area& a) {
-            auto berth =
-                std::find_if(berths.begin(), berths.end(),
-                             [&](const Berth& b) { return a.contain(b.pos); });
+            auto berth = std::find_if(berths.begin(), berths.end(), [&](const Berth& b) { return a.contain(b.pos); });
             log_assert(berth != berths.end(), "berth not found");
             log_assert(!berth->berth_area.valid(), "already set berth area");
             log_assert(a.valid(), "invalid area:%s", a.to_string().c_str());
@@ -660,9 +636,7 @@ public:
             log_info("berth[%d] area:%s", berth->id, a.to_string().c_str());
         };
         auto update_dock_area_info = [&](Area& a) {
-            auto berth =
-                std::find_if(berths.begin(), berths.end(),
-                             [&](const Berth& b) { return a.contain(b.pos); });
+            auto berth = std::find_if(berths.begin(), berths.end(), [&](const Berth& b) { return a.contain(b.pos); });
 
             log_assert(berth != berths.end(), "berth not found");
             log_assert(!berth->berth_area.valid(), "already set dock area");
@@ -693,8 +667,7 @@ public:
                 }
                 case GameMap::DELIVERY: {
                     delivery_points.emplace_back(i, j);
-                    log_trace("delivery_point:(%d,%d),size:%d",
-                              P_ARG(delivery_points.back()), delivery_points.size());
+                    log_trace("delivery_point:(%d,%d),size:%d", P_ARG(delivery_points.back()), delivery_points.size());
                     break;
                 }
                 case GameMap::BERTH: {
@@ -702,18 +675,15 @@ public:
                     if (!berth_visited[i][j]) {
                         Point left_top = Point(i, j);
                         Point right_bottom = Point(i, j);
-                        while (right_bottom.x < 200 &&
-                            game_map.is_berth_pos({right_bottom.x, j})) {
+                        while (right_bottom.x < 200 && game_map.is_berth_pos({right_bottom.x, j})) {
                             berth_visited[right_bottom.x][j] = true;
                             right_bottom.x++;
                         }
-                        while (right_bottom.y < 200 &&
-                            game_map.is_berth_pos({i, right_bottom.y})) {
+                        while (right_bottom.y < 200 && game_map.is_berth_pos({i, right_bottom.y})) {
                             berth_visited[i][right_bottom.y] = true;
                             right_bottom.y++;
                         }
-                        Area berth_area_tmp =
-                            Area(left_top, {right_bottom.x - 1, right_bottom.y - 1});
+                        Area berth_area_tmp = Area(left_top, {right_bottom.x - 1, right_bottom.y - 1});
                         update_berth_area_info(berth_area_tmp);
 
                         for (int x = left_top.x; x < right_bottom.x; x++) {
@@ -729,16 +699,13 @@ public:
                     if (!dock_visited[i][j]) {
                         Point left_top = Point(i, j);
                         Point right_bottom = Point(i, j);
-                        while (right_bottom.x < 200 &&
-                            game_map.is_dock_pos({right_bottom.x, j})) {
+                        while (right_bottom.x < 200 && game_map.is_dock_pos({right_bottom.x, j})) {
                             right_bottom.x++;
                         }
-                        while (right_bottom.y < 200 &&
-                            game_map.is_dock_pos({i, right_bottom.y})) {
+                        while (right_bottom.y < 200 && game_map.is_dock_pos({i, right_bottom.y})) {
                             right_bottom.y++;
                         }
-                        Area dock_area_tmp =
-                            Area(left_top, {right_bottom.x - 1, right_bottom.y - 1});
+                        Area dock_area_tmp = Area(left_top, {right_bottom.x - 1, right_bottom.y - 1});
                         update_dock_area_info(dock_area_tmp);
                         for (int x = left_top.x; x < right_bottom.x; x++) {
                             for (int y = left_top.y; y < right_bottom.y; y++) {
@@ -755,68 +722,19 @@ public:
         }
 
         for (auto& berth : berths) {
-            log_assert(berth.dock_area.contain(berth.pos),
-                       "berth[%d] dock_area not contain pos:(%d,%d)", berth.id,
+            log_assert(berth.dock_area.contain(berth.pos), "berth[%d] dock_area not contain pos:(%d,%d)", berth.id,
                        P_ARG(berth.pos));
-            log_assert(berth.berth_area.contain(berth.pos),
-                       "berth[%d] berth_area not contain pos:(%d,%d)", berth.id,
+            log_assert(berth.berth_area.contain(berth.pos), "berth[%d] berth_area not contain pos:(%d,%d)", berth.id,
                        P_ARG(berth.pos));
-            log_assert(berth.dock_area.contain(berth.berth_area),
-                       "berth[%d] dock_area not contain berth_area", berth.id);
+            log_assert(berth.dock_area.contain(berth.berth_area), "berth[%d] dock_area not contain berth_area",
+                       berth.id);
         }
 
-        std::chrono::high_resolution_clock::time_point end =
-            std::chrono::high_resolution_clock::now();
+        std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
         log_info("map_process done, time:%d ms",
-                 std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-                 .count());
+                 std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
     }
 
-    /**
-     * @brief 获得离机器人最近的港口路径
-     *
-     * @param from 机器人位置
-     * @param berth_id 返回的港口id
-     * @param founded  是否找到路径
-     * @return std::vector<Point> 返回的路径
-     */
-    std::vector<Point> get_near_berth_path_v1(const Point& from, int& berth_id,
-                                              bool& founded) {
-        std::vector<Point> path;
-        float final_wight = 444444.f;
-        int min_berth_id = 0;
-        bool found_path = false;
-        // 只要能到达任意一个港口就行
-        for (int i = 0; i < berths.size(); i++) {
-            if (berth_is_baned(i)) {
-                continue;
-            }
-            Point berth_pos = Point(berths[i].pos.x, berths[i].pos.y);
-            // auto cur_path = get_path_from_point_to_berth(i, from, found_path);
-
-            auto cur_path =
-                berths_come_from_for_robot[i].get_path_from_point(from, found_path);
-
-            auto& cur_berth = berths[i];
-            if (found_path) {
-                // float berth_wight = cur_berth.calc_berth_wight(from); // 越大越好
-                float cur_wight =
-                    static_cast<float>(cur_path.size() + 1) / 1; // 越小越好
-
-                if (cur_wight < final_wight) {
-                    final_wight = cur_wight;
-                    min_berth_id = i;
-                    path = cur_path;
-                    founded = true;
-                }
-            }
-        }
-        berth_id = min_berth_id;
-        log_info("from(%d,%d) to berth[%d] (%d,%d) size:%d", from.x, from.y,
-                 min_berth_id, berths[min_berth_id].pos.x,
-                 berths[min_berth_id].pos.y, path.size());
-        return path;
-    }
 
     /**
      * @brief 获得最富有的港口(港口周围很多货还没有搬)路径
@@ -826,8 +744,7 @@ public:
      * @param founded  是否找到路径
      * @return std::vector<Point> 返回的路径
      */
-    std::vector<Point> get_rich_berth_path(const Point& from, int& berth_id,
-                                           bool& founded) {
+    std::vector<Point> get_rich_berth_path(const Point& from, int& berth_id, bool& founded) {
         std::vector<Point> path;
         float final_wight = -200.f; // 越大越好
         int min_berth_id = 0;
@@ -840,24 +757,21 @@ public:
 
             Point berth_pos = Point(berths[i].pos.x, berths[i].pos.y);
             // auto cur_path = get_path_from_point_to_berth(i, from, found_path);
-            auto cur_path =
-                berths_come_from_for_robot[i].get_path_from_point(from, found_path);
+            auto cur_path = berths_come_from_for_robot[i].get_path_from_point(from, found_path);
 
             auto& cur_berth = berths[i];
             if (found_path) {
                 const int near_goods_num = cur_berth.near_goods_num;
                 const int near_goods_value = cur_berth.near_goods_value;
-                const int near_goods_distance =
-                    cur_berth.near_goods_distance * 2 + cur_path.size();
+                const int near_goods_distance = cur_berth.near_goods_distance * 2 + cur_path.size();
 
                 if (near_goods_value < 4000) {
                     continue;
                 }
 
-                const float money_per_distance =
-                    static_cast<float>(near_goods_value) / (near_goods_distance + 1);
-                const float money_per_goods = static_cast<float>(near_goods_value) /
-                    static_cast<float>(near_goods_num + 1);
+                const float money_per_distance = static_cast<float>(near_goods_value) / (near_goods_distance + 1);
+                const float money_per_goods =
+                    static_cast<float>(near_goods_value) / static_cast<float>(near_goods_num + 1);
 
                 // TODO: 有更好的方法吗? 越大越好
                 float cur_wight = near_goods_value / (near_goods_distance + 1.0);
@@ -875,15 +789,13 @@ public:
         log_info("will go to "
                  "berth[%d],near_goods_num:%d,near_goods_value:%d,near_goods_"
                  "distance:%d",
-                 min_berth_id, berths[min_berth_id].near_goods_num,
-                 berths[min_berth_id].near_goods_value,
+                 min_berth_id, berths[min_berth_id].near_goods_num, berths[min_berth_id].near_goods_value,
                  berths[min_berth_id].near_goods_distance);
 
         return path;
     }
 
-    std::vector<Point> get_near_berth_path_exclude(const Point& from,
-                                                   int& berth_id, bool& founded,
+    std::vector<Point> get_near_berth_path_exclude(const Point& from, int& berth_id, bool& founded,
                                                    std::vector<int>& visit) {
         std::vector<Point> path;
         int min_dis = 999999;
@@ -895,15 +807,13 @@ public:
             if (berth_is_baned(i)) {
                 continue;
             }
-            if (std::any_of(visit.begin(), visit.end(),
-                            [i](int v) { return v == i; })) {
+            if (std::any_of(visit.begin(), visit.end(), [i](int v) { return v == i; })) {
                 continue;
             }
 
             Point berth_pos = Point(berths[i].pos.x, berths[i].pos.y);
             // auto cur_path = get_path_from_point_to_berth(i, from, found_path);
-            auto cur_path =
-                berths_come_from_for_robot[i].get_path_from_point(from, found_path);
+            auto cur_path = berths_come_from_for_robot[i].get_path_from_point(from, found_path);
 
             if (found_path) {
                 if (cur_path.size() < min_dis) {
@@ -917,8 +827,7 @@ public:
 
         berth_id = min_berth_id;
         visit.push_back(min_berth_id);
-        log_info("from(%d,%d) to berth[%d] (%d,%d) size:%d", from.x, from.y,
-                 min_berth_id, berths[min_berth_id].pos.x,
+        log_info("from(%d,%d) to berth[%d] (%d,%d) size:%d", from.x, from.y, min_berth_id, berths[min_berth_id].pos.x,
                  berths[min_berth_id].pos.y, path.size());
         return path;
     }
@@ -953,7 +862,7 @@ public:
         return std::nullopt;
     }
 
-    std::optional<int> in_delivery_point_area(const Point& p) {
+    std::optional<int> in_delivery_point_area(const Point& p) const {
         for (int i = 0; i < delivery_points.size(); i++) {
             if (delivery_points[i] == p) {
                 return i;
@@ -968,7 +877,7 @@ public:
      * @param p
      * @return std::optional<int> 机器人商店位置
      */
-    std::optional<Point> in_robot_shop_area(const Point& p) {
+    std::optional<Point> in_robot_shop_area(const Point& p) const {
         for (int i = 0; i < robot_shops.size(); i++) {
             // TODO: 扩大范围
             if (robot_shops[i] == p) {
@@ -1005,13 +914,11 @@ public:
             scanf("%d%d%d%d", &berth_id, &x, &y, &loadingspeed);
             berths.emplace_back(Berth{berth_id, Point{x, y}, 0, loadingspeed});
         }
-        std::sort(berths.begin(), berths.end(),
-                  [](const Berth& a, const Berth& b) { return a.id < b.id; });
+        std::sort(berths.begin(), berths.end(), [](const Berth& a, const Berth& b) { return a.id < b.id; });
 
         for (int i = 0; i < berths.size(); i++) {
             log_assert(berths[i].id == i, "berth id:%d", berths[i].id);
-            log_info("berth[%d](%d,%d),loading_speed:%d", i, berths[i].pos.x,
-                     berths[i].pos.y, berths[i].loading_speed);
+            log_info("berth[%d](%d,%d),loading_speed:%d", i, berths[i].pos.x, berths[i].pos.y, berths[i].loading_speed);
         }
 
         // 计算 transport_time 平均数
@@ -1020,8 +927,7 @@ public:
             loading_speed_sum += berth.loading_speed;
         }
 
-        float loading_speed_avg =
-            static_cast<float>(loading_speed_sum) / berths.size();
+        float loading_speed_avg = static_cast<float>(loading_speed_sum) / berths.size();
 
         for (auto& berth : berths) {
             berth.avg_berth_loading_speed = loading_speed_avg;
@@ -1029,7 +935,7 @@ public:
         log_info("Berths initialized,loading_speed_avg:%f", loading_speed_avg);
     }
 
-    void init_done() {
+    static void init_done() {
         char okk[10];
         scanf("%s", okk);
         printf("OK\n");
@@ -1051,11 +957,30 @@ public:
 
         map_process();
         all_come_from_init();
-        log_info("IoLayer init time:%d ms",
-                 std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-                 .count());
+        log_info("IoLayer init time:%d ms", std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
         mini_ship_loop_path_init();
         init_done();
+    }
+
+    /**
+     * @brief 初始化,但是不发送ok,用统计地图数据
+     *
+     */
+    void init_but_not_send_ok() {
+        auto start = std::chrono::high_resolution_clock::now();
+        init_game_map();
+        init_berths();
+        // game_map.init_robot_pos();
+        init_ships();
+        auto end = std::chrono::high_resolution_clock::now();
+
+        map_process();
+        all_come_from_init();
+        log_info("IoLayer init time:%d ms", std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+        mini_ship_loop_path_init();
+        print_final_info();
+        // 等待 5 秒
+        std::this_thread::sleep_for(std::chrono::seconds(5));
     }
 
     // ------------------------------------------
@@ -1073,8 +998,7 @@ public:
             scanf("%d%d%d", &x, &y, &money);
             if (money != 0) {
                 new_goods_list.emplace_back(Point(x, y), money, cur_cycle + 1000, GoodsStatus::Normal);
-                log_trace("new goods[%d]:(%d,%d),money:%d,end_cycle:%d", i, x, y, money,
-                          cur_cycle + 1000);
+                log_trace("new goods[%d]:(%d,%d),money:%d,end_cycle:%d", i, x, y, money, cur_cycle + 1000);
                 statistic.totol_goods_list.push_back(new_goods_list.back());
             }
         }
@@ -1087,9 +1011,8 @@ public:
             int id, goods, x, y;
             scanf("%d%d%d%d", &id, &goods, &x, &y);
             // 添加新的机器人
-            if (std::find_if(robots.begin(), robots.end(), [&id](Robot& r) {
-                return r.id == id;
-            }) == robots.end()) {
+            if (std::find_if(robots.begin(), robots.end(), [&id](const Robot& r) { return r.id == id; }) == robots.
+                end()) {
                 robots.emplace_back(id, Point(x, y), goods == 1, 1);
                 log_info("new robot[%d](%d,%d),goods:%d", i, x, y, goods);
                 continue;
@@ -1102,9 +1025,8 @@ public:
         }
 
         for (int i = 0; i < robots.size(); i++) {
-            log_info("robot[%d](%d,%d),goods:%d, robots.size():%d", i,
-                     robots[i].pos.x, robots[i].pos.y, robots[i].had_goods,
-                     robots.size());
+            log_info("robot[%d](%d,%d),goods:%d, robots.size():%d", i, robots[i].pos.x, robots[i].pos.y,
+                     robots[i].had_goods, robots.size());
             log_assert(robots[i].id == i, "robot id:%d,i:%d", robots[i].id, i);
         }
 
@@ -1115,9 +1037,8 @@ public:
         for (int i = 0; i < ship_nums; i++) {
             int ship_id, goods_num, x, y, direction, status;
             scanf("%d%d%d%d%d%d", &ship_id, &goods_num, &x, &y, &direction, &status);
-            if (std::find_if(ships.begin(), ships.end(), [&ship_id](Ship& ship) {
-                return ship.id == ship_id;
-            }) == ships.end()) {
+            if (std::find_if(ships.begin(), ships.end(), [&ship_id](const Ship& ship) { return ship.id == ship_id; }) ==
+                ships.end()) {
                 ships.emplace_back(ship_id, goods_num, ship_capacity, Point(x, y),
                                    Direction::int_to_direction(direction), status, cur_cycle);
                 log_info("new ship[%d](%d,%d)", i, x, y);
@@ -1186,46 +1107,32 @@ public:
         commands.push_back({ROBOT_MOVE, robot_id, static_cast<int>(direction)});
     }
 
-    void robot_move(int robot_id, Point to) {
-        this->robot_move(robot_id,
-                         Direction::calc_direction(robots[robot_id].pos, to));
+    void robot_move(const int robot_id, const Point& to) {
+        this->robot_move(robot_id, Direction::calc_direction(robots[robot_id].pos, to));
     }
 
     void robot_get(int robot_id) { commands.push_back({ROBOT_GET, robot_id, 0}); }
 
-    void robot_pull(int robot_id) {
-        commands.push_back({ROBOT_PULL, robot_id, 0});
-    }
+    void robot_pull(int robot_id) { commands.push_back({ROBOT_PULL, robot_id, 0}); }
 
-    void robot_lbot(const Point& pos) {
-        commands.push_back({ROBOT_LBOT, pos.x, pos.y});
-    }
+    void robot_lbot(const Point& pos) { commands.push_back({ROBOT_LBOT, pos.x, pos.y}); }
 
     // ------------------------------------------
     // 船只指令
     // ------------------------------------------
-    void ship_move(const int ship_id) {
-        commands.push_back({SHIP_MOVE, ship_id, 0});
-    }
+    void ship_move(const int ship_id) { commands.push_back({SHIP_MOVE, ship_id, 0}); }
 
-    void ship_dept(const int ship_id) {
-        commands.push_back({SHIP_DEPT, ship_id, 0});
-    }
+    void ship_dept(const int ship_id) { commands.push_back({SHIP_DEPT, ship_id, 0}); }
 
-    void ship_berth(const int ship_id) {
-        commands.push_back({SHIP_BERTH, ship_id, 0});
-    }
+    void ship_berth(const int ship_id) { commands.push_back({SHIP_BERTH, ship_id, 0}); }
 
     // 0表示顺时针方向，1表示逆时针方向
     void ship_rot(const int ship_id, const int rot_direction) {
-        log_assert(rot_direction == 0 || rot_direction == 1, "rot_direction:%d",
-                   rot_direction);
+        log_assert(rot_direction == 0 || rot_direction == 1, "rot_direction:%d", rot_direction);
         commands.push_back({SHIP_ROT, ship_id, rot_direction});
     }
 
-    void ship_lboat(const Point& pos) {
-        commands.push_back({SHIP_LBOAT, pos.x, pos.y});
-    }
+    void ship_lboat(const Point& pos) { commands.push_back({SHIP_LBOAT, pos.x, pos.y}); }
 
     bool is_valid_move(const Point& from, const Point& to) {
         if (from.x < 0 || from.x >= 200 || from.y < 0 || from.y >= 200) {

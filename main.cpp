@@ -9,6 +9,7 @@ int main() {
 #endif
     auto m = new ManagerNew();
     try {
+        // m->io_layer.init_but_not_send_ok();
         m->init_game();
         m->run_game();
     }

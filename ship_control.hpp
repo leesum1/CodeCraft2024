@@ -50,7 +50,7 @@ public:
      * @param ship
      * @return std::optional<int>
      */
-    int get_rich_berth_id(Ship& ship) {
+    int get_rich_berth_id(Ship& ship) const {
         std::vector<BerthInfo> berth_infos = get_berth_infos_for_ship(ship);
         int berth_id = get_random_berth_id(ship);
         int max_value = 0;
@@ -76,7 +76,7 @@ public:
         std::vector<BerthInfo> berth_infos = get_berth_infos_for_ship(ship);
         const int remain_capacity = ship.remain_capacity();
 
-        static const int MAX_DISTANCE = 20000;
+        static constexpr int MAX_DISTANCE = 20000;
 
         int full_berth_id = get_random_berth_id(ship);
         int full_min_distance = MAX_DISTANCE;

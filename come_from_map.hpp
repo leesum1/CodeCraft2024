@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -29,7 +30,7 @@ public:
         come_from_set_list.emplace_back(Tools::map_to_set(come_from_map_list.front()));
         start_pos.emplace_back(start);
         this->name = name;
-        log_trace("ComeFromMap:%s,init. come_from_map size:%d  ", name.c_str(), come_from_set_list.front().size());
+        log_trace("ComeFromMap:%s,init. come_from_map size:%d, avg_cost:%d  ", name.c_str(), come_from_set_list.front().size(),average_cost());
     }
 
     void init(const std::string& name, const Area& start, const std::function<bool(const Point&)>& is_barrier,
@@ -46,10 +47,19 @@ public:
             this->start_pos.push_back(start_points.at(i));
         }
         this->name = name;
-        log_trace("ComeFromMap:%s,init. come_from_map size:%d  ", name.c_str(), come_from_set_list.front().size());
+        log_trace("ComeFromMap:%s,init. come_from_map size:%d, avg_cost:%d", name.c_str(), come_from_set_list.front().size(),average_cost());
     }
 
     bool path_exist(const Point& to) { return come_from_set_list.front().find(to) != come_from_set_list.front().end(); }
+
+    uint64_t average_cost() const {
+        uint64_t sum = 0;
+        for (const auto& p : come_from_map_list.front()) {
+            // 来回的花费
+            sum += p.second.cost*2;
+        }
+        return sum / come_from_map_list.front().size();
+    }
 
     std::optional<int> get_point_cost(const Point& to) const {
         std::optional<int> cost = std::nullopt;

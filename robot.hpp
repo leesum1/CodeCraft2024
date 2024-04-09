@@ -27,6 +27,7 @@ public:
   int collision_cycle = 0;
   int goted_goods_count = 0;
   int goted_goods_value = 0;
+  std::vector<Goods> goods_list{}; // 机器人拥有的货物列表
 
   explicit Robot() {
     this->id = 0;
@@ -39,11 +40,25 @@ public:
   void pull_goods_statistic(const Goods& goods) {
     goted_goods_count++;
     goted_goods_value += goods.money;
+    goods_list.push_back(goods);
   }
 
   void printf_goods_statistic() {
-    log_info("robot[%d],goted_goods_count:%d,sell_goods_value:%d", id,
-             goted_goods_count, goted_goods_value);
+        // 以 20 为单位,统计货物价值
+        std::array<int, 10> goods_value_step_by_20{};
+
+        for (auto& goods : goods_list) {
+            int step = goods.money / 20;
+            if (step >= 10) {
+                step = 9;
+            }
+            goods_value_step_by_20[step]++;
+        }
+        log_info("robot[%d] goted goods count:%d, value:%d", id, goted_goods_count, goted_goods_value);
+        for (int i = 0; i < 10; i++) {
+            log_info("robot[%d] goods->[%d-%d]:%d",id, i * 20, (i + 1) * 20 - 1,
+                     goods_value_step_by_20[i]);
+        }
   }
 
   Point get_next_pos() {

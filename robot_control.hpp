@@ -5,6 +5,7 @@
 #include "point.hpp"
 #include "robot.hpp"
 #include <algorithm>
+#include <cstdlib>
 #include <utility>
 
 class RobotControl {
@@ -45,8 +46,11 @@ public:
    * @param goods_info
    * @return int 计算后的比重,越大越好
    */
-  static int goods_strategy_value_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
-    return goods_info.value;
+  static int goods_strategy_value_first(const GoodsInfo& goods_info) {
+    if (goods_info.value > goods_info.avg_value){
+    return goods_info.value*100;
+    }
+    return goods_strategy_quality_first(goods_info, false);
   }
 
   /**
@@ -57,10 +61,11 @@ public:
    */
   static int goods_strategy_distance_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
     constexpr int max_distance = 2000;
+    int w = goods_info.value <20? 2: 1;
     if (only_care_robot_distance) {
-      return max_distance - goods_info.distance_to_robot;
+      return max_distance - w*goods_info.distance_to_robot;
     }
-    return max_distance - goods_info.distance_to_robot - goods_info.distance_to_berth;
+    return max_distance - (goods_info.distance_to_robot + goods_info.distance_to_berth)*w;
   }
 
   /**
@@ -85,9 +90,18 @@ public:
    * @return int 计算后的比重,越大越好
    */
   static int goods_strategy_remain_time_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
-    if (goods_info.remain_time > 300) {
+    const int time_level = 500;
+
+
+    if (goods_info.remain_time > time_level) {
       return goods_strategy_quality_first(goods_info, only_care_robot_distance);
     }
+
+    if (std::abs(goods_info.distance_to_robot - goods_info.distance_to_berth) > 5) {
+      return goods_strategy_quality_first(goods_info, only_care_robot_distance);
+    }
+
+
     // 最大值200
     const double value_sig = Tools::scaled_sigmoid(1, 200, goods_info.avg_value, goods_info.value);
 
@@ -137,21 +151,117 @@ public:
     // x:97,y:85.685939
     // x:98,y:90.583035
     // x:99,y:95.529142
-    if (value_sig < 90) {
+    if (value_sig < 10) {
+      if(goods_info.value < 20){
+        return 2*goods_strategy_quality_first(goods_info, false);
+      }
+      if(goods_info.value < 40){
+        return 2*2*goods_strategy_quality_first(goods_info, false);
+      }
+
+      if (goods_info.remain_time > 350) {
+        return 2 *2* goods_strategy_quality_first(goods_info, false);
+      }
+
+      if (goods_info.remain_time > 250) {
+        return 2*3 * goods_strategy_quality_first(goods_info, false);
+      }
       // 90 以下
-      if (goods_info.remain_time > 200) {
-        return 4 * goods_strategy_quality_first(goods_info, false);
+      if (goods_info.remain_time > 150) {
+        return 2*4 * goods_strategy_quality_first(goods_info, false);
       }
-      if (goods_info.remain_time > 100 && goods_info.remain_time <= 200) {
-        return 5 * goods_strategy_quality_first(goods_info, false);
+      if (goods_info.remain_time > 50) {
+        return 2*5 * goods_strategy_quality_first(goods_info, false);
       }
-      return 6 * goods_strategy_quality_first(goods_info, false);
+      return 2*6 * goods_strategy_quality_first(goods_info, false);
     }
     // 最大值为150,确保低价值不会被选中
-    const int remine_time_val = 150 - goods_info.remain_time / 2;
+    const int remine_time_val = (time_level - goods_info.remain_time) / 2;
     // 给一个乘数,确保选择剩余时间少的货物
-    return (remine_time_val + static_cast<int>(value_sig)) * 30000 / goods_info.distance_to_robot;
+    return (remine_time_val+static_cast<int>(value_sig)) * 30000 / (goods_info.distance_to_robot + goods_info.distance_to_berth);
   }
+
+
+
+
+  /**
+   * @brief 寻物策略4: 优先选择剩余时间最少的货物
+   * @param goods_info
+   * @param only_care_robot_distance 是否只考虑机器人距离
+   * @return int 计算后的比重,越大越好
+   */
+  static int goods_strategy_remain_time_first2(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
+    if (goods_info.remain_time > 100) {
+      return goods_strategy_quality_first(goods_info, only_care_robot_distance);
+    }
+
+    // 距离其他港口近，则其他港口的机器人管
+    if(std::abs(goods_info.distance_to_robot-goods_info.distance_to_berth) > 10){
+      return goods_strategy_quality_first(goods_info, only_care_robot_distance);
+    }
+
+
+    // 最大值200
+    const double value_sig = Tools::scaled_sigmoid(1, 200, goods_info.avg_value, goods_info.value);
+
+    // 价值太低,不考虑
+    // x:55,y:3.186402
+    // x:56,y:3.413559
+    // x:57,y:3.663997
+    // x:58,y:3.940032
+    // x:59,y:4.244197
+    // x:60,y:4.579256
+    // x:61,y:4.948221
+    // x:62,y:5.354373
+    // x:63,y:5.801277
+    // x:64,y:6.292802
+    // x:65,y:6.833134
+    // x:66,y:7.426797
+    // x:67,y:8.078667
+    // x:68,y:8.793979
+    // x:69,y:9.578344
+    // x:70,y:10.437749
+    // x:71,y:11.378559
+    // x:72,y:12.407511
+    // x:73,y:13.531698
+    // x:74,y:14.758546
+    // x:75,y:16.095778
+    // x:76,y:17.551367
+    // x:77,y:19.133469
+    // x:78,y:20.850347
+    // x:79,y:22.710267
+    // x:80,y:24.721381
+    // x:81,y:26.891586
+    // x:82,y:29.228362
+    // x:83,y:31.738588
+    // x:84,y:34.428341
+    // x:85,y:37.302679
+    // x:86,y:40.365406
+    // x:87,y:43.618838
+    // x:88,y:47.063568
+    // x:89,y:50.698239
+    // x:90,y:54.519343
+    // x:91,y:58.521049
+    // x:92,y:62.695078
+    // x:93,y:67.030633
+    // x:94,y:71.514395
+    // x:95,y:76.130593
+    // x:96,y:80.861156
+    // x:97,y:85.685939
+    // x:98,y:90.583035
+    // x:99,y:95.529142
+    if (value_sig < 60) {
+      // 90 以下
+        return goods_strategy_quality_first(goods_info, true);
+    }
+    // 最大值为150,确保低价值不会被选中
+    const int remine_time_val = 100 - goods_info.remain_time;
+    // 给一个乘数,确保选择剩余时间少的货物
+    return (remine_time_val + static_cast<int>(value_sig)) * 30000 / (goods_info.distance_to_robot + goods_info.distance_to_berth);
+  }
+
+
+
 
 
   /**

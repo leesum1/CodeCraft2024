@@ -41,6 +41,10 @@ public:
     return goods_info;
   }
 
+  int max_robots_in_berth() const {
+    return 2 + ((io_layer->robots.size()+io_layer->berths.size()-1) / io_layer->berths.size());
+  }
+
   /**
    * @brief 寻物策略1: 优先选择价值最高的货物
    * @param goods_info
@@ -75,11 +79,16 @@ public:
    * @return int 计算后的比重,越大越好
    */
   static int goods_strategy_quality_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
+
+    int w = 2;
+    if (std::abs(goods_info.distance_to_robot - goods_info.distance_to_berth) > 5) {
+        w = 1;
+    }
     // 最大值200
     if (only_care_robot_distance) {
-      return 100 * goods_info.value / (goods_info.distance_to_robot + 1);
+      return 50*w * goods_info.value / (goods_info.distance_to_robot + 1);
     }
-    return 100 * goods_info.value / (goods_info.distance_to_robot + goods_info.distance_to_berth + 1);
+    return 50*w * goods_info.value / (goods_info.distance_to_robot + goods_info.distance_to_berth + 1);
   }
 
 
@@ -90,7 +99,8 @@ public:
    * @return int 计算后的比重,越大越好
    */
   static int goods_strategy_remain_time_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
-    const int time_level = 500;
+    const int time_level = TIME_LEVEL;
+    const int level_step = time_level / 6;
 
 
     if (goods_info.remain_time > time_level) {
@@ -151,34 +161,21 @@ public:
     // x:97,y:85.685939
     // x:98,y:90.583035
     // x:99,y:95.529142
-    if (value_sig < 10) {
+    if (value_sig < 60) {
       if(goods_info.value < 20){
         return 2*goods_strategy_quality_first(goods_info, false);
       }
-      if(goods_info.value < 40){
-        return 2*2*goods_strategy_quality_first(goods_info, false);
-      }
+      const int level_idx = goods_info.remain_time / level_step;
 
-      if (goods_info.remain_time > 350) {
-        return 2 *2* goods_strategy_quality_first(goods_info, false);
-      }
 
-      if (goods_info.remain_time > 250) {
-        return 2*3 * goods_strategy_quality_first(goods_info, false);
-      }
-      // 90 以下
-      if (goods_info.remain_time > 150) {
-        return 2*4 * goods_strategy_quality_first(goods_info, false);
-      }
-      if (goods_info.remain_time > 50) {
-        return 2*5 * goods_strategy_quality_first(goods_info, false);
-      }
-      return 2*6 * goods_strategy_quality_first(goods_info, false);
+      const int rate = 2 * (8 - level_idx);
+      log_assert(level_idx < 8, "error, level_idx should less than 8,%d", level_idx);
+      return rate * goods_strategy_quality_first(goods_info, false);
     }
     // 最大值为150,确保低价值不会被选中
     const int remine_time_val = (time_level - goods_info.remain_time) / 2;
     // 给一个乘数,确保选择剩余时间少的货物
-    return (remine_time_val+static_cast<int>(value_sig)) * 30000 / (goods_info.distance_to_robot + goods_info.distance_to_berth);
+    return (remine_time_val+static_cast<int>(value_sig)) * (80000 / (goods_info.distance_to_robot));
   }
 
 
@@ -418,28 +415,29 @@ public:
       return;
     }
 
-    auto& robot_path = robot.path_list;
     const Point robot_pos = robot.pos;
 
-    if (!robot_path.empty()) {
+    if (!robot.path_list.empty()) {
       robot.update_next_pos();
+      return;
     }
 
     bool founded = false;
     int berth_id;
-
     std::vector<int> exclude_berths{};
-    // for (int i = 0; i < BERTH_NUM; i++) {
-    //   if (get_berth_robot_num(i, robot_id) > 3 && !io_layer->final_time) {
-    //     exclude_berths.emplace_back(i);
-    //   }
-    // }
+    for (int i = 0; i < io_layer->berths.size(); i++) {
+      if (io_layer->get_berth_robot_num(i) > max_robots_in_berth()) {
+        exclude_berths.emplace_back(i);
+      }
+    }
 
     auto path = io_layer->get_near_berth_path_exclude(robot_pos, berth_id,
                                                       founded, exclude_berths);
 
     if (founded) {
-      robot_path = path;
+      log_trace("robot[%d] go_near_berth success, berth_id:%d, path_size:%d", robot.id,
+                berth_id,path.size());
+      robot.path_list = path;
       // berths_id_list[robot_id] = berth_id;
       robot.target_berth_id = berth_id;
       robot.update_next_pos();
@@ -569,13 +567,13 @@ public:
     bool near_berth_founded = false;
     int near_berth_id;
 
-    std::vector<int> exclude_berths{};
 
-    // for (int i = 0; i < BERTH_NUM; i++) {
-    //   if (get_berth_robot_num(i, robot.id) > 1 && !io_layer->final_time) {
-    //     exclude_berths.emplace_back(i);
-    //   }
-    // }
+    std::vector<int> exclude_berths{};
+    for (int i = 0; i < io_layer->berths.size(); i++) {
+      if (io_layer->get_berth_robot_num(i) > max_robots_in_berth()) {
+        exclude_berths.emplace_back(i);
+      }
+    }
 
     std::vector<Point> near_path = io_layer->get_near_berth_path_exclude(
       robot_pos, near_berth_id, near_berth_founded, exclude_berths);
@@ -585,7 +583,7 @@ public:
                 robot.id, near_berth_id);
 
       robot.target_berth_id = near_berth_id; // 设置机器人的目标港口
-      robot.path_list = Tools::last_n(near_path, 10);
+      robot.path_list = near_path;
       robot.idle_cycle =
         robot.path_list.size(); // 更新机器人的路径时间,时间内不再寻路
       robot.next_pos_before_collision_check =

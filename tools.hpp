@@ -2,6 +2,7 @@
 #pragma once
 
 #include <ctime>
+#include <list>
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
@@ -54,5 +55,11 @@ namespace Tools {
   std::unordered_set<T> vector_to_set(const std::vector<T>& v) {
     std::unordered_set<T> s(v.begin(), v.end());
     return s;
+  }
+
+  template <typename T>
+  std::list<T> vector_to_list(const std::vector<T>& v) {
+    std::list<T> l(v.begin(), v.end());
+    return l;
   }
 } // namespace Tools

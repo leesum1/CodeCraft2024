@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <optional>
+#include <utility>
 #include "direction.hpp"
 #include "io_laye_new.hpp"
 #include "log.h"
 #include "point.hpp"
 #include "ship.hpp"
+#include "tools.hpp"
 
 class ShipControl {
     IoLayerNew* io_layer = nullptr;
@@ -286,6 +288,8 @@ public:
         ship.next_command_before_collison = next_command;
     }
 
+
+
     bool set_next_target_berth(Ship& ship) {
         while (!ship.berth_point_id.empty()) {
             if (!io_layer->berth_had_other_ship(ship.id, ship.berth_point_id.front())) {
@@ -295,7 +299,18 @@ public:
             }
             ship.berth_point_id.pop_front();
         }
-        return false;
+
+
+         return false;
+    }
+
+    bool can_go_to_berth(Ship& ship) const {
+        const int min_cost = io_layer->get_minimum_berth_cost_for_ship(ship.pos).second;
+        log_trace("ship[%d] can_go_to_berth, remain_cycle:%d, min_cost:%d", ship.id, io_layer->remain_cycle(), min_cost);
+        if (io_layer->remain_cycle() < min_cost) {
+            return false;
+        }
+        return true;
     }
 
 
@@ -306,27 +321,34 @@ public:
                 for (auto& goods : ship.goods_list) {
                     io_layer->statistic.selled_goods_list.emplace_back(goods);
                 }
-                log_trace("ship[%d] sell goods to deliver[%d], nums:%d,val:%d, spend time:%d ", ship.id,
+                log_trace("[%d] ship[%d] sell goods to deliver[%d], nums:%d,val:%d, spend time:%d ",io_layer->cur_cycle, ship.id,
                           deliver_id.value(),
                           ship.goods_list.size(), ship.cur_value(), ship.eclipsed_cycle(io_layer->cur_cycle));
                 ship.goods_list.clear();
-                ship.start_cycle = io_layer->cur_cycle;
-                ship.start_new_transport(io_layer->cur_cycle, deliver_id.value(),
-                                         io_layer->get_best_berth_list(ship));
-                set_next_target_berth(ship);
+                if(can_go_to_berth(ship)){
+                    ship.start_cycle = io_layer->cur_cycle;
+                    ship.start_new_transport(io_layer->cur_cycle, deliver_id.value(),
+                                            io_layer->get_best_berth_list(ship));
+                    set_next_target_berth(ship);
+                }else{
+                    ship.next_command_before_collison = ShipCommand::DEPT;
+                    ship.fsm = ShipFSM::DEAD;
+                }
             }
         }
     }
 
     void must_go_to_delivery(Ship& ship) {
         const auto [deliver_id, distance] = io_layer->get_minimum_delivery_point_cost_for_ship(ship.pos);
-        const int remain_time = 15000 - io_layer->cur_cycle;
-        if (remain_time > 14000) {
+        if (io_layer->remain_cycle() >1000) {
             return;
         }
-        if ((remain_time - distance) < 10) {
+        if ((io_layer->remain_cycle() - distance) < 10) {
+            if(ship.fsm == ShipFSM::GO_TO_DELIVERY){
+                return;
+            }
             log_trace("ship[%d] must go to delivery, deliver_id:%d, distance:%d, remain_time:%d", ship.id, deliver_id,
-                      distance, remain_time);
+                      distance, io_layer->remain_cycle());
             ship.fsm = ShipFSM::GO_TO_DELIVERY;
             ship.set_target_delivery_id(deliver_id);
             ship.path.clear();
@@ -451,6 +473,26 @@ public:
         }
     }
 
+    std::pair<bool, int> ship_trap_remained_cycle(const Ship& ship) const {
+        int remained_cycle = 0;
+        auto cur_pos = ship.pos;
+        for (const auto& berth_id : ship.berth_point_id) {
+            const int to_berth_distance = io_layer->berths_come_from_for_ship.at(berth_id).get_point_cost(cur_pos).value_or(20000);
+            cur_pos = io_layer->berths[berth_id].pos;
+            remained_cycle += to_berth_distance;
+            remained_cycle += 20; // 预估停靠时间
+        }
+        const auto [deliver_id, to_deliver_distance] = io_layer->get_minimum_delivery_point_cost_for_ship(cur_pos);
+        remained_cycle += to_deliver_distance;
+        cur_pos = io_layer->delivery_points[deliver_id];
+        const auto [berth_id, to_berth_distance] = io_layer->get_minimum_berth_cost_for_ship(cur_pos);
+
+        bool can_start_new_trap = io_layer->remain_cycle() > (remained_cycle + to_berth_distance + 10);
+
+
+        return {can_start_new_trap, remained_cycle};
+    }
+
     void ship_loading(Ship& ship) {
         if (ship.fsm != ShipFSM::LOADING) {
             return;
@@ -469,6 +511,14 @@ public:
             return;
         }
         if (cur_berth.is_empty()) {
+            
+            const auto  [can_start_new_trap, trap_remained_cycle] = ship_trap_remained_cycle(ship);
+            if (!can_start_new_trap &&io_layer->remain_cycle() > trap_remained_cycle) {
+                log_trace("ship[%d] can not start new trap, trap_remained_cycle:%d, remain_cycle:%d", ship.id,
+                          trap_remained_cycle, io_layer->remain_cycle());
+                return;
+            }
+
             if (ship.berth_point_id.empty()) {
                 ship.fsm = ShipFSM::GO_TO_DELIVERY;
                 cur_berth.occupied_ship_id = std::nullopt;
@@ -653,7 +703,7 @@ public:
         std::optional<int> high_quality_berth_id;
         float max_quality_rate = ship_cur_quality_rate(ship);
         for (auto& berth : io_layer->berths) {
-            if (berth.id == ship.target_berth_id) {
+            if (io_layer->berth_had_other_ship(ship.id, berth.id)){
                 continue;
             }
             const float quality_rate = ship_next_quality_rate(ship, berth.id);
@@ -662,7 +712,6 @@ public:
                 high_quality_berth_id = berth.id;
             }
         }
-
         return high_quality_berth_id;
     }
 };

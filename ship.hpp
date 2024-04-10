@@ -4,6 +4,7 @@
 #include "log.h"
 #include "point.hpp"
 #include <array>
+#include <cstdio>
 #include <cstdlib>
 #include <functional>
 #include <optional>
@@ -59,6 +60,10 @@ public:
     // 一些状态位置
     std::vector<Goods> goods_list{}; // 货物列表
     int start_cycle = 0; // 开始运输货物的起始时间, 当到达交货点时, 会更新为当前周期
+
+    void printf_cur_value() {
+        fprintf(stderr, "ship[%d] cur_num:%d,  cur_value:%d path size:%ld \n", this->id, this->cur_capacity, this->cur_value(),path.size());
+    }
 
 
     void start_new_transport(const int cur_cycle, const int start_delivery_id,

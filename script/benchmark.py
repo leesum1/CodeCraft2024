@@ -38,6 +38,7 @@ class CmdConfig(NamedTuple):
     rand_seed: int
     max_robot_num: int
     max_ship_num: int
+    time_level: int
 
 
 def gen_cmd_config_list(count: int) -> list[CmdConfig]:
@@ -49,6 +50,7 @@ def gen_cmd_config_list(count: int) -> list[CmdConfig]:
         max_ship_num = random.randint(1, 2)
         cmd_config = CmdConfig(map_path, rand_seed, max_robot_num, max_ship_num)
         cmd_config_list.append(cmd_config)
+        time_level = random.randint(100, 500)
     return cmd_config_list
 
 
@@ -73,6 +75,11 @@ def change_max_ship_num(num: int):
     # 修改 config.h 中的 #define MAX_SHIP_NUM
     run_command(
         f"sed -i 's/^#define MAX_SHIP_NUM.*/#define MAX_SHIP_NUM {num}/' {HOME_PATH}/config.h"
+    )
+# #define TIME_LEVEL 400
+def change_time_level(num:int):
+    run_command(
+        f"sed -i 's/^#define TIME_LEVEL.*/#define TIME_LEVEL {num}/' {HOME_PATH}/config.h"
     )
 
 
@@ -128,6 +135,7 @@ def build_program():
     run_command(
         f"sed -i 's/^#define LOG_ENABLE/\/\/#define LOG_ENABLE/' {HOME_PATH}/config.h"
     )
+    run_command(f"make -C {HOME_PATH} clean ")
     run_command(f"make -C {HOME_PATH}")
     # 恢复 config.h 中的 #define LOG_ENABLE 注释，使用 Linux 工具
     run_command(
@@ -202,6 +210,7 @@ def run_with_config_once(config: CmdConfig,csv_path:str):
     # 重新编译程序
     change_max_robot_num(config.max_robot_num)
     change_max_ship_num(config.max_ship_num)
+    change_time_level(config.time_level)
     build_program()
     rm_replay_dir()
     target_program = os.path.join(HOME_PATH, "build", "main")
@@ -255,8 +264,9 @@ def find_best_config(config:CmdConfig):
     config_list = list()
     for robot_num in range(12, 21):
         for ship_num in range(1, 3):
-            print(f"robot_num:{robot_num},ship_num:{ship_num}")
-            config_list.append(CmdConfig(config.map_path, config.rand_seed, robot_num, ship_num))
+            for time_level in range(100, 501, 100):
+                print(f"robot_num:{robot_num},ship_num:{ship_num}")
+                config_list.append(CmdConfig(config.map_path, config.rand_seed, robot_num, ship_num,time_level))
     
     csv_name = f"data/{config.rand_seed}-{map_name}.csv"
     for config in tqdm(config_list):
@@ -280,7 +290,7 @@ def new_benchmark():
     # 1298200600: 60
     test_cmds = [
         get_preliminary_command(
-            os.path.join(HOME_PATH, map_path), 3948242330, target_program
+            os.path.join(HOME_PATH, map_path), 2217634674, target_program
         )
         for map_path in semi_maps_list
     ]
@@ -354,10 +364,14 @@ def new_benchmark():
 
 
 if __name__ == "__main__":
-    
+    # new_benchmark()
     seed_list = random.sample(range(0, 0xFFFFFFFE), 1000)
     
     for seed in seed_list:
         for map_path in semi_maps_list:
-            config = CmdConfig(os.path.join(HOME_PATH,map_path),seed,12,1)
-            find_best_config(config)
+            for time_level in range(100, 501, 100):
+                config = CmdConfig(os.path.join(HOME_PATH,map_path),seed,12,1,time_level)
+                find_best_config(config)
+    
+    # config1 = CmdConfig(os.path.join(HOME_PATH,semi_maps_list[2]),991156464,12,1)
+    # find_best_config(config1)

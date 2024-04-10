@@ -23,7 +23,8 @@ public:
     RobotCollisionAvoid robot_collision_avoid{&io_layer};
     ShipControl ship_control{&io_layer};
     RobotControl robot_control{&io_layer};
-
+    int expect_robot_num = MAX_ROBOT_NUM;
+    int expect_ship_num = MAX_SHIP_NUM;
     ManagerNew() = default;
 
     ~ManagerNew() = default;
@@ -39,13 +40,25 @@ public:
         //     return quality_strategy;
         // }
 
-        if (robot_id <  0) {
-            auto dis_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
-                return RobotControl::goods_strategy_distance_first(goods_info, false);
-            };
-            return dis_strategy;
-        }
+        // if (robot_id <  1) {
+        //     auto dis_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
+        //         return RobotControl::goods_strategy_distance_first(goods_info, false);
+        //     };
+        //     return dis_strategy;
+        // }
+        // if(io_layer.robots.size() < expect_robot_num){
+        //     auto quality_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
+        //         return RobotControl::goods_strategy_quality_first(goods_info, true);
+        //     };
+        //     return quality_strategy;
+        // }
 
+        // if(io_layer.remain_cycle() <1000){
+        //     auto quality_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
+        //         return RobotControl::goods_strategy_quality_first(goods_info, true);
+        //     };
+        //     return quality_strategy;
+        // }
 
 
         auto time_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
@@ -157,10 +170,16 @@ public:
     }
 
     void buy_robot_and_ship() {
-        int expect_robot_num = MAX_ROBOT_NUM;
-        int expect_ship_num = MAX_SHIP_NUM;
-        // if (io_layer.berths_come_from_for_robot[0].map_size() < 25000) {
-        //     expect_robot_num -= 2;
+
+        // if (io_layer.berths_come_from_for_robot[0].map_size() == 19676) {
+        //     expect_robot_num =15;
+        //     expect_ship_num = 1;
+        // }
+        // else if (io_layer.berths_come_from_for_robot[0].map_size() == 32131) {
+        //     expect_robot_num = 18;
+        //     expect_ship_num = 2;                                        
+        // } else {
+        //     expect_robot_num = 18;
         //     expect_ship_num = 1;
         // }
 
@@ -169,6 +188,10 @@ public:
         if (io_layer.robots.size() < expect_robot_num && io_layer.cur_money > io_layer.robot_price) {
             const auto rand_robot_shop = io_layer.robot_shops.at(Tools::random(0ul, io_layer.robot_shops.size() - 1));
             io_layer.robot_lbot(rand_robot_shop);
+
+            if (io_layer.robots.size()+1 == expect_robot_num) {
+                log_info("robot max num [%d] at cycle :%d", io_layer.robots.size()+1,io_layer.cur_cycle);
+            }
         }
         if (io_layer.cur_cycle == 1) {
             io_layer.ship_lboat(io_layer.ship_shops.back());
@@ -179,6 +202,9 @@ public:
                 io_layer.ship_capacity * (io_layer.ships.size() + 2)) {
                 const auto rand_ship_shop = io_layer.ship_shops.at(Tools::random(0ul, io_layer.ship_shops.size() - 1));
                 io_layer.ship_lboat(rand_ship_shop);
+                if (io_layer.ships.size() == expect_ship_num) {
+                    log_info("ship max num at[%d] cycle :%d", io_layer.ships.size(),io_layer.cur_cycle);
+                }
             }
         }
     }
@@ -251,10 +277,11 @@ public:
                 ship.clear_flags();
             }
             for (auto &ship : io_layer.ships) {
-                if (io_layer.cur_cycle < io_layer.ship_capacity * 10) {
+                if (io_layer.cur_cycle < io_layer.ship_capacity * 5) {
                     continue;
                 }
                 ship_control.sell_goods_and_new_transport(ship);
+                ship_control.must_go_to_delivery(ship);
                 // log_assert(ship.cur_capacity == ship.goods_list.size(),
                 //            "ship.cur_capacity:%d ship.goods_list.size():%d",
                 //            ship.cur_capacity, ship.goods_list.size());
@@ -262,7 +289,7 @@ public:
                 //          ship.cur_capacity, ship.goods_list.size());
                 ship_control.ship_control_fsm(ship);
                 ship_control.drop_path_point_if_reach(ship);
-                // ship_control.must_go_to_delivery(ship);
+                ship_control.must_go_to_delivery(ship);
                 ship_control.ship_loading(ship);
                 ship_control.go_to_berth(ship);
                 ship_control.go_to_deliver(ship);

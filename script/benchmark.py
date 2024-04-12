@@ -247,11 +247,11 @@ def run_with_config_once(config: CmdConfig,csv_path:str):
         # 如果文件为空
         if os.path.getsize(os.path.join(HOME_PATH, csv_path)) == 0:
             f.write(
-                "rand_seed,map_name,robot_num,ship_num,ship_capcity,score,total_value,goted_value,selled_value,total_num,goted_num,selled_num\n"
+                "rand_seed,map_name,robot_num,ship_num,time_level,ship_capcity,score,total_value,goted_value,selled_value,total_num,goted_num,selled_num\n"
             )
         
         f.write(
-            f"{config.rand_seed},{map_name},{max_score_info.robot_num},{max_score_info.ship_num},{max_score_info.ship_capacity},{max_score},{max_score_info.total_goods_money},{max_score_info.goted_goods_money},{max_score_info.selled_goods_money},{max_score_info.total_goods_num},{max_score_info.goted_goods_num},{max_score_info.selled_goods_num}\n"
+            f"{config.rand_seed},{map_name},{max_score_info.robot_num},{max_score_info.ship_num},{config.time_level},{max_score_info.ship_capacity},{max_score},{max_score_info.total_goods_money},{max_score_info.goted_goods_money},{max_score_info.selled_goods_money},{max_score_info.total_goods_num},{max_score_info.goted_goods_num},{max_score_info.selled_goods_num}\n"
         )
 
 def find_best_config(config:CmdConfig):
@@ -280,7 +280,7 @@ def find_best_config(config:CmdConfig):
     
 
 
-def new_benchmark():
+def new_benchmark(map_seed:int):
     rm_replay_dir()
     target_program = os.path.join(HOME_PATH, "build", "main")
     # 721423:82
@@ -290,7 +290,7 @@ def new_benchmark():
     # 1298200600: 60
     test_cmds = [
         get_preliminary_command(
-            os.path.join(HOME_PATH, map_path), 2217634674, target_program
+            os.path.join(HOME_PATH, map_path), map_seed, target_program
         )
         for map_path in semi_maps_list
     ]
@@ -364,14 +364,14 @@ def new_benchmark():
 
 
 if __name__ == "__main__":
-    # new_benchmark()
-    seed_list = random.sample(range(0, 0xFFFFFFFE), 1000)
+    new_benchmark(2973400933)
+    # seed_list = random.sample(range(0, 0xFFFFFFFE), 1000)
     
-    for seed in seed_list:
-        for map_path in semi_maps_list:
-            for time_level in range(100, 501, 100):
-                config = CmdConfig(os.path.join(HOME_PATH,map_path),seed,12,1,time_level)
-                find_best_config(config)
+    # for seed in seed_list:
+    #     for map_path in semi_maps_list:
+    #         for time_level in range(100, 501, 100):
+    #             config = CmdConfig(os.path.join(HOME_PATH,map_path),seed,12,1,time_level)
+    #             find_best_config(config)
     
     # config1 = CmdConfig(os.path.join(HOME_PATH,semi_maps_list[2]),991156464,12,1)
     # find_best_config(config1)

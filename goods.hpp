@@ -16,6 +16,7 @@ public:
   int money;          // 货物价值
   int end_cycle;      // 货物消失的周期
   GoodsStatus status; // 货物状态
+  int to_near_berth_cost = 20000; // 到最近的停靠点的距离
 
    std::string to_string() const {
     return "Goods: pos: (" + std::to_string(pos.x) + ", " +
@@ -37,7 +38,9 @@ public:
   // 拷贝构造函数
   Goods(const Goods &other)
       : pos(other.pos), money(other.money), end_cycle(other.end_cycle),
-        status(other.status) {}
+        status(other.status) {
+    to_near_berth_cost = other.to_near_berth_cost;
+  }
   ~Goods() = default;
 
   bool operator==(const Goods &other) const {

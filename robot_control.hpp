@@ -31,19 +31,16 @@ public:
    * @param robot_come_from 机器人当前位置的打表
    * @return
    */
-  GoodsInfo get_goods_info_for_robot(const Goods& goods, ComeFromMap& robot_come_from) const {
+  GoodsInfo get_goods_info_for_robot(const Goods& goods, const ComeFromMap& robot_come_from) const {
     GoodsInfo goods_info{};
     goods_info.value = goods.money;
-    goods_info.avg_value = 100;
+    goods_info.avg_value = std::max(70, io_layer->statistic.avg_total_goods_value());
     goods_info.distance_to_robot = robot_come_from.get_point_cost(goods.pos).value_or(20000);
-    goods_info.distance_to_berth = io_layer->get_minimum_berth_cost(goods.pos).second;
+    goods_info.distance_to_berth = goods.to_near_berth_cost;
     goods_info.remain_time = goods.end_cycle - io_layer->cur_cycle;
     return goods_info;
   }
 
-  int max_robots_in_berth() const {
-    return 2 + ((io_layer->robots.size()+io_layer->berths.size()-1) / io_layer->berths.size());
-  }
 
   /**
    * @brief 寻物策略1: 优先选择价值最高的货物
@@ -51,8 +48,8 @@ public:
    * @return int 计算后的比重,越大越好
    */
   static int goods_strategy_value_first(const GoodsInfo& goods_info) {
-    if (goods_info.value > goods_info.avg_value){
-    return goods_info.value*100;
+    if (goods_info.value > goods_info.avg_value) {
+      return goods_info.value * 100;
     }
     return goods_strategy_quality_first(goods_info, false);
   }
@@ -65,11 +62,11 @@ public:
    */
   static int goods_strategy_distance_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
     constexpr int max_distance = 2000;
-    int w = goods_info.value <20? 2: 1;
+    int w = goods_info.value < 20 ? 2 : 1;
     if (only_care_robot_distance) {
-      return max_distance - w*goods_info.distance_to_robot;
+      return max_distance - w * goods_info.distance_to_robot;
     }
-    return max_distance - (goods_info.distance_to_robot + goods_info.distance_to_berth)*w;
+    return max_distance - (goods_info.distance_to_robot + goods_info.distance_to_berth) * w;
   }
 
   /**
@@ -79,16 +76,15 @@ public:
    * @return int 计算后的比重,越大越好
    */
   static int goods_strategy_quality_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
-
     int w = 2;
     if (std::abs(goods_info.distance_to_robot - goods_info.distance_to_berth) > 5) {
-        w = 1;
+      w = 1;
     }
     // 最大值200
     if (only_care_robot_distance) {
-      return 50*w * goods_info.value / (goods_info.distance_to_robot + 1);
+      return 50 * w * goods_info.value / (goods_info.distance_to_robot + 1);
     }
-    return 50*w * goods_info.value / (goods_info.distance_to_robot + goods_info.distance_to_berth + 1);
+    return 50 * w * goods_info.value / (goods_info.distance_to_robot + goods_info.distance_to_berth + 1);
   }
 
 
@@ -99,8 +95,8 @@ public:
    * @return int 计算后的比重,越大越好
    */
   static int goods_strategy_remain_time_first(const GoodsInfo& goods_info, const bool only_care_robot_distance) {
-    const int time_level = TIME_LEVEL;
-    const int level_step = time_level / 6;
+    constexpr int time_level = TIME_LEVEL;
+    constexpr int level_step = time_level / 6;
 
 
     if (goods_info.remain_time > time_level) {
@@ -161,9 +157,9 @@ public:
     // x:97,y:85.685939
     // x:98,y:90.583035
     // x:99,y:95.529142
-    if (value_sig < 60) {
-      if(goods_info.value < 20){
-        return 2*goods_strategy_quality_first(goods_info, false);
+    if (value_sig < goods_info.avg_value) {
+      if (goods_info.value < 20) {
+        return goods_strategy_quality_first(goods_info, false);
       }
       const int level_idx = goods_info.remain_time / level_step;
 
@@ -175,10 +171,8 @@ public:
     // 最大值为150,确保低价值不会被选中
     const int remine_time_val = (time_level - goods_info.remain_time) / 2;
     // 给一个乘数,确保选择剩余时间少的货物
-    return (remine_time_val+static_cast<int>(value_sig)) * (80000 / (goods_info.distance_to_robot));
+    return (remine_time_val + static_cast<int>(value_sig)) * (80000 / (goods_info.distance_to_robot));
   }
-
-
 
 
   /**
@@ -193,7 +187,7 @@ public:
     }
 
     // 距离其他港口近，则其他港口的机器人管
-    if(std::abs(goods_info.distance_to_robot-goods_info.distance_to_berth) > 10){
+    if (std::abs(goods_info.distance_to_robot - goods_info.distance_to_berth) > 10) {
       return goods_strategy_quality_first(goods_info, only_care_robot_distance);
     }
 
@@ -249,16 +243,14 @@ public:
     // x:99,y:95.529142
     if (value_sig < 60) {
       // 90 以下
-        return goods_strategy_quality_first(goods_info, true);
+      return goods_strategy_quality_first(goods_info, true);
     }
     // 最大值为150,确保低价值不会被选中
     const int remine_time_val = 100 - goods_info.remain_time;
     // 给一个乘数,确保选择剩余时间少的货物
-    return (remine_time_val + static_cast<int>(value_sig)) * 30000 / (goods_info.distance_to_robot + goods_info.distance_to_berth);
+    return (remine_time_val + static_cast<int>(value_sig)) * 30000 / (goods_info.distance_to_robot + goods_info.
+      distance_to_berth);
   }
-
-
-
 
 
   /**
@@ -407,8 +399,11 @@ public:
     return std::make_pair(goods_final, path_tmp);
   }
 
-
-  void go_near_berth(Robot& robot) {
+  /**
+   * @brief 控制机器人去最近的港口
+   * @param robot
+   */
+  void go_near_berth(Robot& robot) const {
     if (!robot.had_goods && !robot.will_goods_in_this_cycle) {
       log_trace("robot[%d] has no goods, no need go_to_berth", robot.id);
       // 机器人没有货物,不需要去靠泊点
@@ -416,8 +411,17 @@ public:
     }
 
     const Point robot_pos = robot.pos;
+    bool robot_target_berth_was_baned = false;
+    if (robot.target_berth_id != -1) {
+      if (io_layer->berths.at(robot.target_berth_id).max_robot_num == 0) {
+        robot_target_berth_was_baned = true;
+        log_info("cycle[%d], robot[%d] target berth:%d was baned, should change target berth", io_layer->cur_cycle,
+                 robot.id,
+                 robot.target_berth_id);
+      }
+    }
 
-    if (!robot.path_list.empty()) {
+    if (!robot.path_list.empty() && !robot_target_berth_was_baned) {
       robot.update_next_pos();
       return;
     }
@@ -426,17 +430,17 @@ public:
     int berth_id;
     std::vector<int> exclude_berths{};
     for (int i = 0; i < io_layer->berths.size(); i++) {
-      if (io_layer->get_berth_robot_num(i) > max_robots_in_berth()) {
+      if (io_layer->get_berth_robot_num(i, robot.id) >= io_layer->berths.at(i).max_robot_num) {
         exclude_berths.emplace_back(i);
       }
     }
 
-    auto path = io_layer->get_near_berth_path_exclude(robot_pos, berth_id,
-                                                      founded, exclude_berths);
+    const auto path = io_layer->get_near_berth_path_exclude(robot_pos, berth_id,
+                                                            founded, exclude_berths);
 
     if (founded) {
       log_trace("robot[%d] go_near_berth success, berth_id:%d, path_size:%d", robot.id,
-                berth_id,path.size());
+                berth_id, path.size());
       robot.path_list = path;
       // berths_id_list[robot_id] = berth_id;
       robot.target_berth_id = berth_id;
@@ -450,7 +454,7 @@ public:
   };
 
   // 机器人卸货
-  void robots_pull_cycle(Robot& robot) {
+  void robots_pull_cycle(Robot& robot) const {
     const auto& next_pos = robot.get_next_pos();
     auto& cur_berth = io_layer->berths[robot.target_berth_id];
     const auto& target_goods = robot.target_goods;
@@ -480,7 +484,7 @@ public:
       // 2. 机器人已经拿到货物
       // 3. 机器人有预定的货物
       io_layer->robot_pull(robot_id);
-      io_layer->statistic.goted_goods_list.emplace_back(target_goods);
+      io_layer->statistic.add_goted_goods(target_goods);
       robot.pull_goods_statistic(target_goods);
       // 更新港口货物信息
       io_layer->berths[berth_id_opt.value()].add_goods(target_goods,
@@ -570,7 +574,7 @@ public:
 
     std::vector<int> exclude_berths{};
     for (int i = 0; i < io_layer->berths.size(); i++) {
-      if (io_layer->get_berth_robot_num(i) > max_robots_in_berth()) {
+      if (io_layer->get_berth_robot_num(i, robot.id) >= io_layer->berths.at(i).max_robot_num) {
         exclude_berths.emplace_back(i);
       }
     }
@@ -598,7 +602,7 @@ public:
     // robots_is_dead[robot_id] = true;
   };
 
-  void robots_move(Robot& robot) {
+  void robots_move(Robot& robot) const {
     const auto& next_pos = robot.get_next_pos();
 
     if (next_pos != invalid_point && next_pos != stop_point) {
@@ -610,7 +614,7 @@ public:
     }
   }
 
-  void robot_get_goods(Robot& robot) {
+  void robot_get_goods(Robot& robot) const {
     const auto& cur_pos = robot.pos;
     auto& cur_berth = io_layer->berths[robot.target_berth_id];
     auto& target_goods = robot.target_goods;
@@ -690,7 +694,7 @@ public:
       // 2. 机器人已经拿到货物
       // 3. 机器人有预定的货物
       io_layer->robot_pull(robot_id);
-      io_layer->statistic.goted_goods_list.emplace_back(target_goods);
+      io_layer->statistic.add_goted_goods(target_goods);
 
       // 清空状态位
       // 1. 机器人的目标货物
@@ -708,7 +712,7 @@ public:
   bool select_goods_path_from_cur_pos(Robot& robot) const {
     log_trace("robot[%d] find_new_goods start from any postion", robot.id);
 
-    auto start_time = std::chrono::steady_clock::now();
+    const auto start_time = std::chrono::steady_clock::now();
     const auto goods_set = Tools::map_to_set(io_layer->map_goods_list);
 
     auto goods_goal_func = [&](const Point& p) {
@@ -730,11 +734,11 @@ public:
     };
 
     bool goods_founded = false;
-    auto goods_path = PATHHelper::bfs_path_v1(
+    const auto goods_path = PATHHelper::bfs_path_v1(
       robot.pos, goods_goal_func, io_layer->get_is_barrier_for_robot_lambda(robot.id, false, true, true),
       io_layer->get_find_neighbor_for_robot_lambda(), 20, goods_founded);
 
-    auto end_time = std::chrono::steady_clock::now();
+    const auto end_time = std::chrono::steady_clock::now();
     log_info("robot[%d] find goods path cost time:%d ms", robot.id,
              std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
                start_time)

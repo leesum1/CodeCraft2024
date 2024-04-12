@@ -79,6 +79,9 @@ private:
   };
 
 public:
+
+
+
   Point find_random_barrier() {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -110,11 +113,11 @@ public:
     return get_pos_type(pos) == PosType::BERTH;
   }
 
-  bool is_valid_pos(const Point& pos) {
+  bool is_valid_pos(const Point& pos) const {
     return pos.x >= 0 && pos.x < 200 && pos.y >= 0 && pos.y < 200;
   }
 
-  bool is_barrier_for_robot(const Point& pos) {
+  bool is_barrier_for_robot(const Point& pos) const {
     if (is_valid_pos(pos)) {
       return lookuptable.at(map[pos.x][pos.y]).second.is_barrier_for_robot;
     }
@@ -187,6 +190,32 @@ public:
     for (int i = 0; i < 200; i++) {
       map[x][i] = buf[i];
     }
+  }
+
+  int land_size() const {
+    int sum = 0;
+    for (int i = 0; i < 200; i++) {
+      for (int j = 0; j < 200; j++) {
+        const auto cur_pos = Point(i, j);
+        if(!is_barrier_for_robot(cur_pos)){
+          sum++;
+        }
+      }
+    }
+    return sum;
+  }
+
+  int sea_size(){
+    int sum = 0;
+    for (int i = 0; i < 200; i++) {
+      for (int j = 0; j < 200; j++) {
+        const auto cur_pos = Point(i, j);
+        if(!is_barrier_for_ship(cur_pos)){
+          sum++;
+        }
+      }
+    }
+    return sum;
   }
 
   void print_map() {

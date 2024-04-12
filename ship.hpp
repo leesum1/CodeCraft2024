@@ -25,7 +25,9 @@ enum class ShipCommand {
     ROTATE_CLOCKWISE, // 顺时针旋转
     ROTATE_COUNTERCLOCKWISE, // 逆时针旋转
     BERTH, // 停泊
-    DEPT // 重置到主航道上
+    DEPT, // 重置到主航道上
+
+
 };
 
 class Ship {
@@ -62,7 +64,7 @@ public:
     int start_cycle = 0; // 开始运输货物的起始时间, 当到达交货点时, 会更新为当前周期
 
     void printf_cur_value() {
-        fprintf(stderr, "ship[%d] cur_num:%d,  cur_value:%d path size:%ld \n", this->id, this->cur_capacity, this->cur_value(),path.size());
+        fprintf(stderr, "ship[%d] fsm:%d, cur_num:%d,  cur_value:%d path size:%ld \n", this->id, static_cast<int>(this->fsm),this->cur_capacity, this->cur_value(),path.size());
     }
 
 
@@ -104,7 +106,7 @@ public:
      */
     bool can_move(std::function<bool(const Point& p)> is_barrier) const {
         const auto next_pos = Direction::move(this->pos, this->direction);
-        auto next_ship_area = Ship::calc_ship_area(next_pos, this->direction);
+        auto next_ship_area = Ship::calc_ship_area_after_rotate(next_pos, this->direction);
 
         std::vector<Point> next_ship_points = next_ship_area.to_points();
         bool will_collision =
@@ -123,8 +125,8 @@ public:
      */
     bool can_rotate(std::function<bool(const Point& p)> is_barrier, bool clockwise_direction) const {
         const auto [next_pos, next_dir] =
-            Ship::calc_rot_action(this->pos, this->direction, clockwise_direction);
-        auto next_ship_area = Ship::calc_ship_area(next_pos, next_dir);
+            Ship::calc_ship_pos_after_rotate(this->pos, this->direction, clockwise_direction);
+        auto next_ship_area = Ship::calc_ship_area_after_rotate(next_pos, next_dir);
 
         std::vector<Point> next_ship_points = next_ship_area.to_points();
         bool will_collision =
@@ -288,7 +290,7 @@ public:
             bool clockwise = rand() % 2 == 0;
 
             const auto [next_pos, next_dir] =
-                calc_rot_action(this->pos, this->direction, clockwise);
+                calc_ship_pos_after_rotate(this->pos, this->direction, clockwise);
             update_func(next_pos, next_dir,
                         clockwise
                             ? ShipCommand::ROTATE_CLOCKWISE
@@ -299,7 +301,7 @@ public:
             const auto rot_dir =
                 Direction::calc_rotate_direction(this->direction, pos_dir);
 
-            const auto [next_pos, next_dir] = calc_rot_action(
+            const auto [next_pos, next_dir] = calc_ship_pos_after_rotate(
                 this->pos, this->direction, rot_dir.value() == Direction::CLOCKWISE);
 
             update_func(next_pos, next_dir,
@@ -346,7 +348,7 @@ public:
                     this->pos, this->direction, rot_dir.value(), is_barrier);
 
                 const auto [next_pos, next_dir] =
-                    calc_rot_action(this->pos, this->direction,
+                    calc_ship_pos_after_rotate(this->pos, this->direction,
                                     refined_rot_dir == Direction::CLOCKWISE);
 
                 update_func(next_pos, next_dir,
@@ -365,7 +367,7 @@ public:
                     Direction::opposite_rotate(rot_dir.value());
 
                 const auto [next_pos, next_dir] =
-                    calc_rot_action(this->pos, this->direction,
+                    calc_ship_pos_after_rotate(this->pos, this->direction,
                                     rot_dir_opposite == Direction::CLOCKWISE);
                 const auto next_command = rot_dir_opposite == Direction::CLOCKWISE
                                               ? ShipCommand::ROTATE_CLOCKWISE
@@ -389,9 +391,9 @@ public:
                              const Direction::Rotate& rot_dir,
                              std::function<bool(const Point& p)> is_barrier) {
         const auto [next_pos, next_dir] =
-            calc_rot_action(pos, cur_dir, rot_dir == Direction::CLOCKWISE);
+            calc_ship_pos_after_rotate(pos, cur_dir, rot_dir == Direction::CLOCKWISE);
 
-        auto next_ship_area_points = calc_ship_area(next_pos, next_dir).to_points();
+        auto next_ship_area_points = calc_ship_area_after_rotate(next_pos, next_dir).to_points();
 
         bool will_collision =
             std::any_of(next_ship_area_points.begin(), next_ship_area_points.end(),
@@ -417,6 +419,10 @@ public:
     bool recover_status() const { return this->status == 1; }
 
     bool load_status() const { return this->status == 2; }
+
+    bool can_operate() const {
+        return !(this->recover_status()  || fsm == ShipFSM::DEAD);
+    }
 
     /**
      * @brief 得到船头的位置
@@ -486,7 +492,7 @@ public:
      *
      * @return Area
      */
-    Area get_ship_area() const { return calc_ship_area(this->pos, this->direction); }
+    Area get_ship_area() const { return calc_ship_area_after_rotate(this->pos, this->direction); }
 
     /**
      * @brief 得到下一个位置的区域,如果下一个位置是停止点,返回std::nullopt
@@ -500,7 +506,7 @@ public:
         if (Point::is_stop_point(next_pos)) {
             return std::nullopt;
         }
-        return calc_ship_area(next_pos, next_dir);
+        return calc_ship_area_after_rotate(next_pos, next_dir);
     }
 
     /**
@@ -510,7 +516,7 @@ public:
      * @param dir
      * @return Area
      */
-    static Area calc_ship_area(const Point& pos, Direction::Direction dir) {
+    static Area calc_ship_area_after_rotate(const Point& pos, Direction::Direction dir) {
         switch (dir) {
         case Direction::RIGHT: {
             return {pos, Point(pos.x + 1, pos.y + 2)};
@@ -543,7 +549,7 @@ public:
      * @return std::pair<Point, Direction::Direction> 旋转后的位置和方向
      */
     static std::pair<Point, Direction::Direction>
-    calc_rot_action(const Point& pos, const Direction::Direction dir,
+    calc_ship_pos_after_rotate(const Point& pos, const Direction::Direction dir,
                     bool clockwise_direction) {
         switch (dir) {
         case Direction::RIGHT: {

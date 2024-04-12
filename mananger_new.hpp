@@ -23,8 +23,7 @@ public:
     RobotCollisionAvoid robot_collision_avoid{&io_layer};
     ShipControl ship_control{&io_layer};
     RobotControl robot_control{&io_layer};
-    int expect_robot_num = MAX_ROBOT_NUM;
-    int expect_ship_num = MAX_SHIP_NUM;
+
     ManagerNew() = default;
 
     ~ManagerNew() = default;
@@ -32,7 +31,7 @@ public:
     void init_game() { io_layer.init(); }
 
 
-    std::function<int(const RobotControl::GoodsInfo &)> get_goods_strategy_lambda(const int robot_id) const {
+    std::function<int(const RobotControl::GoodsInfo&)> get_goods_strategy_lambda(const int robot_id) const {
         // if (robot_id == 0) {
         //     auto quality_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
         //         return RobotControl::goods_strategy_quality_first(goods_info, false);
@@ -46,6 +45,7 @@ public:
         //     };
         //     return dis_strategy;
         // }
+
         // if(io_layer.robots.size() < expect_robot_num){
         //     auto quality_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
         //         return RobotControl::goods_strategy_quality_first(goods_info, true);
@@ -61,7 +61,7 @@ public:
         // }
 
 
-        auto time_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
+        auto time_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
             return RobotControl::goods_strategy_remain_time_first(goods_info, true);
         };
         return time_strategy;
@@ -69,13 +69,16 @@ public:
 
     void goods_list_cycle() {
         // 将新货物添加到货物列表中
-        for (auto &i : io_layer.new_goods_list) {
-            const auto [_, mini_cost] = io_layer.get_minimum_berth_cost(i.pos);
+        for (auto& i : io_layer.new_goods_list) {
+            const auto [_, mini_cost] = io_layer.get_minimum_berth_cost_for_robot(i.pos);
             // 无法到达的货物不添加到货物列表中
-            if (mini_cost > 20000) {
+            if (mini_cost > 2000) {
                 continue;
             }
             io_layer.map_goods_list[i.pos] = i;
+            io_layer.map_goods_list[i.pos].to_near_berth_cost = mini_cost;
+            io_layer.statistic.add_total_goods(io_layer.map_goods_list[i.pos]);
+            log_assert(mini_cost == io_layer.map_goods_list[i.pos].to_near_berth_cost, "mini_cost:%d", mini_cost);
             log_assert(i.pos != invalid_point, "invalid goods");
         }
 
@@ -83,7 +86,7 @@ public:
         // const bool update_goods_info = false;
 
         if (update_goods_info) {
-            for (auto &berth : io_layer.berths) {
+            for (auto& berth : io_layer.berths) {
                 berth.clear_goods_info();
                 berth.tmp_baned = false;
             }
@@ -98,7 +101,7 @@ public:
             else {
                 if (update_goods_info) {
                     for (int i = 0; i < io_layer.berths.size(); i++) {
-                        auto &cur_berth = io_layer.berths[i];
+                        auto& cur_berth = io_layer.berths[i];
                         // auto cur_cost = io_layer.get_cost_from_berth_to_point(i,
                         // it->first);
                         auto cur_cost = io_layer.berths_come_from_for_robot[i].get_point_cost(it->first);
@@ -170,40 +173,34 @@ public:
     }
 
     void buy_robot_and_ship() {
+        static int max_robot_num = io_layer.max_robot_num();
+        static int max_ship_num = io_layer.calc_max_ship_num();
+#if SCRIPT_MODE == 1
+        max_robot_num = MAX_ROBOT_NUM;
+        max_ship_num = MAX_SHIP_NUM;
+#endif
 
-        // if (io_layer.berths_come_from_for_robot[0].map_size() == 19676) {
-        //     expect_robot_num =15;
-        //     expect_ship_num = 1;
-        // }
-        // else if (io_layer.berths_come_from_for_robot[0].map_size() == 32131) {
-        //     expect_robot_num = 18;
-        //     expect_ship_num = 2;                                        
-        // } else {
-        //     expect_robot_num = 18;
-        //     expect_ship_num = 1;
-        // }
+        log_assert(io_layer.robots.size() <= max_robot_num, "robot num:%d", io_layer.robots.size());
 
-        log_assert(io_layer.robots.size() <= expect_robot_num, "robot num:%d", io_layer.robots.size());
-
-        if (io_layer.robots.size() < expect_robot_num && io_layer.cur_money > io_layer.robot_price) {
+        if (io_layer.robots.size() < max_robot_num && io_layer.cur_money > io_layer.robot_price) {
             const auto rand_robot_shop = io_layer.robot_shops.at(Tools::random(0ul, io_layer.robot_shops.size() - 1));
             io_layer.robot_lbot(rand_robot_shop);
 
-            if (io_layer.robots.size()+1 == expect_robot_num) {
-                log_info("robot max num [%d] at cycle :%d", io_layer.robots.size()+1,io_layer.cur_cycle);
+            if (io_layer.robots.size() + 1 == max_robot_num) {
+                log_info("robot max num [%d] at cycle :%d", io_layer.robots.size()+1, io_layer.cur_cycle);
             }
         }
         if (io_layer.cur_cycle == 1) {
             io_layer.ship_lboat(io_layer.ship_shops.back());
         }
-        if (io_layer.ships.size() < expect_ship_num && io_layer.cur_money > io_layer.ship_price &&
-            io_layer.robots.size() == expect_robot_num) {
+        if (io_layer.ships.size() < max_ship_num && io_layer.cur_money > io_layer.ship_price &&
+            io_layer.robots.size() == max_robot_num) {
             if (io_layer.statistic.goted_goods_count() - io_layer.statistic.selled_goods_count() >
                 io_layer.ship_capacity * (io_layer.ships.size() + 2)) {
                 const auto rand_ship_shop = io_layer.ship_shops.at(Tools::random(0ul, io_layer.ship_shops.size() - 1));
                 io_layer.ship_lboat(rand_ship_shop);
-                if (io_layer.ships.size() == expect_ship_num) {
-                    log_info("ship max num at[%d] cycle :%d", io_layer.ships.size(),io_layer.cur_cycle);
+                if (io_layer.ships.size() == max_ship_num) {
+                    log_info("ship max num at[%d] cycle :%d", io_layer.ships.size(), io_layer.cur_cycle);
                 }
             }
         }
@@ -223,20 +220,42 @@ public:
         return false;
     }
 
+    void berth_cycle() {
+        int remain_robot_num = 0;
+        for (auto& berth : io_layer.berths) {
+            if (!io_layer.berth_is_ocuppied(berth.id) && !berth.can_arrive_at_next_time(io_layer.cur_cycle) && berth.
+                max_robot_num != 0) {
+                remain_robot_num += berth.max_robot_num;
+                berth.max_robot_num = 0;
+                log_info("cycle[%d] berth[%d] will not arrive at next time, should close", io_layer.cur_cycle,
+                         berth.id);
+            }
+        }
+        // 重新分配机器人
+        if (remain_robot_num != 0) {
+            for (auto& berth : io_layer.berths) {
+                if (berth.max_robot_num != 0) {
+                    berth.max_robot_num += remain_robot_num;
+                }
+            }
+        }
+    }
+
+
     void run_game() {
         for (int zhen = 1; zhen <= 15000; zhen++) {
             io_layer.input_cycle();
 
             // 更新货物信息
             goods_list_cycle();
-
+            berth_cycle();
             buy_robot_and_ship();
-            for (auto &robot : io_layer.robots) {
+            for (auto& robot : io_layer.robots) {
                 robot.clear_flags();
             }
 
 
-            for (auto &robot : io_layer.robots) {
+            for (auto& robot : io_layer.robots) {
                 if (robot_is_baned(robot.id)) {
                     continue;
                 }
@@ -253,10 +272,12 @@ public:
 
             // 按照节点值的大小顺序排序索引数组，而不改变原始节点的顺序
             std::sort(indices.begin(), indices.end(),
-                      [&](size_t a, size_t b) { return io_layer.robots[a].priority < io_layer.robots[b].priority; });
+                      [&](const size_t a, const size_t b) {
+                          return io_layer.robots[a].priority < io_layer.robots[b].priority;
+                      });
 
-            for (size_t i : indices) {
-                auto &robot = io_layer.robots[i];
+            for (const size_t i : indices) {
+                auto& robot = io_layer.robots[i];
                 if (robot_is_baned(robot.id)) {
                     continue;
                 }
@@ -265,7 +286,7 @@ public:
             robot_collision_avoid.check_collision_pair();
 
 
-            for (auto &robot : io_layer.robots) {
+            for (auto& robot : io_layer.robots) {
                 if (robot_is_baned(robot.id)) {
                     continue;
                 }
@@ -273,11 +294,11 @@ public:
                 robot_control.robots_pull_cycle(robot);
             }
 
-            for (auto &ship : io_layer.ships) {
+            for (auto& ship : io_layer.ships) {
                 ship.clear_flags();
             }
-            for (auto &ship : io_layer.ships) {
-                if (io_layer.cur_cycle < io_layer.ship_capacity * 5) {
+            for (auto& ship : io_layer.ships) {
+                if (io_layer.cur_cycle < 400 || ship.can_operate() == false) {
                     continue;
                 }
                 ship_control.sell_goods_and_new_transport(ship);
@@ -296,17 +317,14 @@ public:
                 ship_control.update_next_pos(ship);
                 ship_control.output_command(ship);
             }
-
-
-            io_layer.output_cycle();
-            io_layer.print_goods_info();
-
             check_robot_collision();
+            io_layer.print_goods_info();
+            io_layer.output_cycle();
             if (abs(io_layer.cur_cycle) == 15000) {
+                io_layer.print_final_info();
                 break;
             }
         }
-        io_layer.print_final_info();
     }
 
     /**
@@ -315,9 +333,9 @@ public:
     void check_robot_collision() {
         std::unordered_set<Point> points_set{};
         bool has_collision = false;
-        for (auto &robot : io_layer.robots) {
-            const auto &cur_pos = robot.pos;
-            const auto &next_pos = robot.get_next_pos();
+        for (auto& robot : io_layer.robots) {
+            const auto& cur_pos = robot.pos;
+            const auto& next_pos = robot.get_next_pos();
             const bool cur_pos_has_collision_effect = io_layer.game_map.has_collision_effect_for_robot(cur_pos);
             const bool next_pos_has_collision_effect = io_layer.game_map.has_collision_effect_for_robot(next_pos);
             const bool cur_pos_is_stop = Point::is_stop_point(cur_pos);
@@ -348,7 +366,7 @@ public:
         }
 
         if (has_collision) {
-            for (auto &robot : io_layer.robots) {
+            for (auto& robot : io_layer.robots) {
                 log_info("robot:%d pos:(%d,%d) next_pos:(%d,%d)", robot.id, robot.pos.x, robot.pos.y,
                          robot.get_next_pos().x, robot.get_next_pos().y);
             }

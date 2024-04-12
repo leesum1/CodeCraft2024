@@ -142,7 +142,7 @@ public:
      * @param ship
      */
     void go_to_berth(Ship& ship) {
-        if (ship.recover_status()) {
+        if (!ship.can_operate()) {
             return;
         }
         if (!(ship.fsm == ShipFSM::GO_TO_BERTH || ship.fsm == ShipFSM::GO_TO_NEXT_BERTH)) {
@@ -198,6 +198,9 @@ public:
      * @param ship
      */
     void go_to_deliver(Ship& ship) const {
+        if (!ship.can_operate()) {
+            return;
+        }
         if (ship.fsm != ShipFSM::GO_TO_DELIVERY) {
             return;
         }
@@ -261,9 +264,9 @@ public:
         log_assert(rot_dir.has_value(), "rot_dir not valid");
 
         const auto [next_pos, next_dir] =
-            Ship::calc_rot_action(ship.pos, ship.direction, rot_dir.value() == Direction::CLOCKWISE);
+            Ship::calc_ship_pos_after_rotate(ship.pos, ship.direction, rot_dir.value() == Direction::CLOCKWISE);
 
-        auto new_ship_area = Ship::calc_ship_area(next_pos, next_dir);
+        auto new_ship_area = Ship::calc_ship_area_after_rotate(next_pos, next_dir);
 
         const auto new_ship_area_points = new_ship_area.to_points();
 
@@ -289,7 +292,6 @@ public:
     }
 
 
-
     bool set_next_target_berth(Ship& ship) {
         while (!ship.berth_point_id.empty()) {
             if (!io_layer->berth_had_other_ship(ship.id, ship.berth_point_id.front())) {
@@ -301,15 +303,16 @@ public:
         }
 
 
-         return false;
+        return false;
     }
 
     bool can_go_to_berth(Ship& ship) const {
-        const int min_cost = io_layer->get_minimum_berth_cost_for_ship(ship.pos).second;
-        log_trace("ship[%d] can_go_to_berth, remain_cycle:%d, min_cost:%d", ship.id, io_layer->remain_cycle(), min_cost);
+        const int min_cost = io_layer->get_minimum_berth_cost_for_ship(ship.pos).second * 2 + 30;
         if (io_layer->remain_cycle() < min_cost) {
             return false;
         }
+        log_trace("ship[%d] can_go_to_berth, remain_cycle:%d, min_cost:%d", ship.id, io_layer->remain_cycle(),
+                  min_cost);
         return true;
     }
 
@@ -319,20 +322,23 @@ public:
         if (deliver_id.has_value() && deliver_id.value() == ship.target_delivery_id) {
             if (ship.normal_status()) {
                 for (auto& goods : ship.goods_list) {
-                    io_layer->statistic.selled_goods_list.emplace_back(goods);
+                    io_layer->statistic.add_selled_goods(goods);
                 }
-                log_trace("[%d] ship[%d] sell goods to deliver[%d], nums:%d,val:%d, spend time:%d ",io_layer->cur_cycle, ship.id,
+                log_trace("[%d] ship[%d] sell goods to deliver[%d], nums:%d,val:%d, spend time:%d ",
+                          io_layer->cur_cycle, ship.id,
                           deliver_id.value(),
                           ship.goods_list.size(), ship.cur_value(), ship.eclipsed_cycle(io_layer->cur_cycle));
                 ship.goods_list.clear();
-                if(can_go_to_berth(ship)){
+                if (can_go_to_berth(ship)) {
                     ship.start_cycle = io_layer->cur_cycle;
                     ship.start_new_transport(io_layer->cur_cycle, deliver_id.value(),
-                                            io_layer->get_best_berth_list(ship));
+                                             io_layer->get_best_berth_list(ship));
                     set_next_target_berth(ship);
-                }else{
+                }
+                else {
                     ship.next_command_before_collison = ShipCommand::DEPT;
                     ship.fsm = ShipFSM::DEAD;
+                    log_info("ship[%d] dead at cycle[%d] ", ship.id, io_layer->cur_cycle);
                 }
             }
         }
@@ -340,11 +346,11 @@ public:
 
     void must_go_to_delivery(Ship& ship) {
         const auto [deliver_id, distance] = io_layer->get_minimum_delivery_point_cost_for_ship(ship.pos);
-        if (io_layer->remain_cycle() >1000) {
+        if (io_layer->remain_cycle() > 1000) {
             return;
         }
         if ((io_layer->remain_cycle() - distance) < 10) {
-            if(ship.fsm == ShipFSM::GO_TO_DELIVERY){
+            if (ship.fsm == ShipFSM::GO_TO_DELIVERY) {
                 return;
             }
             log_trace("ship[%d] must go to delivery, deliver_id:%d, distance:%d, remain_time:%d", ship.id, deliver_id,
@@ -465,7 +471,7 @@ public:
                 break;
             }
             case ShipFSM::DEAD: {
-                log_info("ship[%d] dead", ship.id);
+                log_info("ship[%d] dead[%d] ", ship.id, io_layer->cur_cycle);
                 break;
             }
             break;
@@ -477,7 +483,8 @@ public:
         int remained_cycle = 0;
         auto cur_pos = ship.pos;
         for (const auto& berth_id : ship.berth_point_id) {
-            const int to_berth_distance = io_layer->berths_come_from_for_ship.at(berth_id).get_point_cost(cur_pos).value_or(20000);
+            const int to_berth_distance = io_layer->berths_come_from_for_ship.at(berth_id).get_point_cost(cur_pos).
+                                                    value_or(20000);
             cur_pos = io_layer->berths[berth_id].pos;
             remained_cycle += to_berth_distance;
             remained_cycle += 20; // 预估停靠时间
@@ -511,10 +518,10 @@ public:
             return;
         }
         if (cur_berth.is_empty()) {
-            
-            const auto  [can_start_new_trap, trap_remained_cycle] = ship_trap_remained_cycle(ship);
-            if (!can_start_new_trap &&io_layer->remain_cycle() > trap_remained_cycle) {
-                log_trace("ship[%d] can not start new trap, trap_remained_cycle:%d, remain_cycle:%d", ship.id,
+            const auto [can_start_new_trap, trap_remained_cycle] = ship_trap_remained_cycle(ship);
+            if (!can_start_new_trap && io_layer->remain_cycle() > trap_remained_cycle) {
+                log_trace("cycle[%d],ship[%d] can not start new trap, trap_remained_cycle:%d, remain_cycle:%d",
+                          io_layer->cur_cycle, ship.id,
                           trap_remained_cycle, io_layer->remain_cycle());
                 return;
             }
@@ -581,7 +588,7 @@ public:
                 update_ship_next_pos(Direction::move(ship.pos, ship.direction), ship.direction, ShipCommand::GO);
             }
             else if (ship_can_rot_counterclockwise) {
-                const auto [next_pos, next_dir] = Ship::calc_rot_action(ship.pos, ship.direction, false);
+                const auto [next_pos, next_dir] = Ship::calc_ship_pos_after_rotate(ship.pos, ship.direction, false);
                 update_ship_next_pos(next_pos, next_dir, ShipCommand::ROTATE_COUNTERCLOCKWISE);
             }
             else {
@@ -591,7 +598,7 @@ public:
         }
         case 2: {
             if (ship_can_rot_clockwise) {
-                const auto [next_pos, next_dir] = Ship::calc_rot_action(ship.pos, ship.direction, true);
+                const auto [next_pos, next_dir] = Ship::calc_ship_pos_after_rotate(ship.pos, ship.direction, true);
                 update_ship_next_pos(next_pos, next_dir, ShipCommand::ROTATE_CLOCKWISE);
             }
             else if (ship_can_move) {
@@ -604,7 +611,7 @@ public:
         }
         case 4: {
             if (ship_can_rot_counterclockwise) {
-                const auto [next_pos, next_dir] = Ship::calc_rot_action(ship.pos, ship.direction, false);
+                const auto [next_pos, next_dir] = Ship::calc_ship_pos_after_rotate(ship.pos, ship.direction, false);
                 update_ship_next_pos(next_pos, next_dir, ShipCommand::ROTATE_COUNTERCLOCKWISE);
             }
             else {
@@ -614,7 +621,7 @@ public:
         }
         case 5: {
             if (ship_can_rot_clockwise) {
-                const auto [next_pos, next_dir] = Ship::calc_rot_action(ship.pos, ship.direction, true);
+                const auto [next_pos, next_dir] = Ship::calc_ship_pos_after_rotate(ship.pos, ship.direction, true);
                 update_ship_next_pos(next_pos, next_dir, ShipCommand::ROTATE_CLOCKWISE);
             }
             else if (ship_can_move) {
@@ -703,7 +710,7 @@ public:
         std::optional<int> high_quality_berth_id;
         float max_quality_rate = ship_cur_quality_rate(ship);
         for (auto& berth : io_layer->berths) {
-            if (io_layer->berth_had_other_ship(ship.id, berth.id)){
+            if (io_layer->berth_had_other_ship(ship.id, berth.id)) {
                 continue;
             }
             const float quality_rate = ship_next_quality_rate(ship, berth.id);

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <list>
 #include <optional>
+#include <unordered_set>
 #include <utility>
 
 struct Berth {
@@ -29,11 +30,22 @@ struct Berth {
   int near_goods_num = 0;
   int near_goods_value = 0;
   int near_goods_distance = 0;
+  int near_delivery_id = -1;
+  int near_delivery_distance = 20000;
+  int max_robot_num = 1;
 
+  std::unordered_set<Point> near_points{};
   std::list<Goods> goods_list;
   // 1000周期内的货物信息
   // std::pair<放入的时间，货物价值>
   std::list<std::pair<int, int>> goods_list_in_1000cycle;
+
+
+  bool can_arrive_at_next_time(const int cur_cycle) const {
+    const int remain_cycle = 15000 - cur_cycle;
+    const bool can_arrive = remain_cycle >= near_delivery_distance * 2 + 20;
+    return can_arrive;
+  }
 
   void tick(const int cur_cycle) {
     // 清除1000周期外的货物信息

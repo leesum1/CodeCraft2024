@@ -102,6 +102,46 @@ public:
 
     int remain_cycle() const { return 15000 - cur_cycle; }
 
+
+    struct ShipTrapInfo {
+        bool can_start_new_trap;
+        int remained_cycle;
+        int target_delivery_id;
+    };
+
+    ShipTrapInfo get_ship_trap_info(const Ship& ship)  {
+        int remained_cycle = 0;
+        auto cur_pos = ship.pos;
+        for (const auto& berth_id : ship.berth_point_id) {
+            const int to_berth_distance = berths_come_from_for_ship.at(berth_id).get_point_cost(cur_pos).value_or(20000);
+            cur_pos = berths[berth_id].pos;
+            remained_cycle += to_berth_distance;
+            remained_cycle += 20; // 预估停靠时间
+        }
+        const auto [deliver_id, to_deliver_distance] = get_minimum_delivery_point_cost_for_ship(cur_pos);
+        remained_cycle += to_deliver_distance;
+        cur_pos = delivery_points[deliver_id];
+        const auto [berth_id, to_berth_distance] = get_minimum_berth_cost_for_ship(cur_pos);
+
+        bool can_start_new_trap = remain_cycle() > (remained_cycle + to_berth_distance*2);
+
+
+        return {can_start_new_trap, remained_cycle, deliver_id};
+    }
+
+
+
+
+
+    void reassign_robot_to_berth(const int inc_num){
+        // 重新分配机器人
+        for (auto& berth : berths) {
+            if (berth.max_robot_num != 0) {
+                berth.max_robot_num += inc_num;
+            }
+        }
+    }
+
     /**
      * @brief 港口是否可用
      * @param berth_id
@@ -109,12 +149,32 @@ public:
      */
     bool berth_is_ocuppied(const int berth_id) const {
         for (const auto& ship : ships) {
+
+            // 将来的目的地是当前港口
             if (std::any_of(ship.berth_point_id.begin(), ship.berth_point_id.end(), [&](const int v) {
                 return v == berth_id;
             })) {
                 return true;
             }
+            // 当前的目的地是当前港口
+            if (ship.target_berth_id == berth_id) {
+                return true;
+            }
+        }
+        return false;
+    }
+    bool berth_is_ocuppied_by_other_ship(const int ship_id,const int berth_id) const {
+        for (const auto& ship : ships) {
+            if (ship.id == ship_id) {
+                continue;
+            }
 
+            if (std::any_of(ship.berth_point_id.begin(), ship.berth_point_id.end(), [&](const int v) {
+                return v == berth_id;
+            })) {
+                return true;
+            }
+        
             if (ship.target_berth_id == berth_id) {
                 return true;
             }
@@ -149,7 +209,7 @@ public:
         }
         else if (area_rate > 0.45) {
             // 45%-55%
-            robot_num += 3;
+            robot_num += 4;
         }
         else if (area_rate > 0.30) {
             // 30%-45%
@@ -214,6 +274,32 @@ public:
         }
 
         return false;
+    }
+
+    bool berth_in_other_ship_berth_list(const int ship_id, const int berth_id) const {
+        for (auto& ship : ships) {
+            if (ship.id == ship_id) {
+                continue;
+            }
+            if (std::any_of(ship.berth_point_id.begin(), ship.berth_point_id.end(), [&](const int v) {
+                return v == berth_id;
+            })) {
+                return true;
+            }
+            if (ship.target_berth_id == berth_id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    bool is_last_berth(const int berth_id) const {
+        int baned_num = std::accumulate(berths.begin(), berths.end(), 0, [](int sum, const Berth& b) {
+            return sum + (b.max_robot_num==0 ? 1 : 0);
+        });
+        return baned_num >= (berths.size() - ships.size());
     }
 
     int calc_delivery_point_id(const int id) const {
@@ -374,6 +460,7 @@ public:
     }
 
 
+    // 使用剩余容量来计算
     std::vector<int> get_best_berth_list_v2(const Ship& ship) {
         std::vector<int> berths_id{};
 
@@ -387,7 +474,7 @@ public:
         const int cur_ship_cost = cur_cycle - ship.start_cycle;
         const int cur_ship_capacity = ship.remain_capacity();
         // 计算当前船的性价比，从当前位置直接去交货点的性价比
-        double best_weight = static_cast<double>(cur_ship_value * 100) / (1 + cur_ship_cost +
+        double best_weight = static_cast<double>(cur_ship_value * 70) / (1 + cur_ship_cost +
             get_minimum_delivery_point_cost_for_ship(ship.pos).
             second);
         std::vector<int> best_id_list{};

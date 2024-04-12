@@ -65,6 +65,10 @@ def rm_replay_dir():
 
 
 def change_max_robot_num(num: int):
+    # 将 #define SCRIPT_MODE 0 改为 #define SCRIPT_MODE 1
+    run_command(
+        f"sed -i 's/^#define SCRIPT_MODE.*/#define SCRIPT_MODE 1/' {HOME_PATH}/config.h"
+    )
     # 修改 config.h 中的 #define MAX_ROBOT_NUM
     run_command(
         f"sed -i 's/^#define MAX_ROBOT_NUM.*/#define MAX_ROBOT_NUM {num}/' {HOME_PATH}/config.h"
@@ -72,12 +76,18 @@ def change_max_robot_num(num: int):
 
 
 def change_max_ship_num(num: int):
+    # 将 #define SCRIPT_MODE 0 改为 #define SCRIPT_MODE 1
+    run_command(
+        f"sed -i 's/^#define SCRIPT_MODE.*/#define SCRIPT_MODE 1/' {HOME_PATH}/config.h"
+    )
     # 修改 config.h 中的 #define MAX_SHIP_NUM
     run_command(
         f"sed -i 's/^#define MAX_SHIP_NUM.*/#define MAX_SHIP_NUM {num}/' {HOME_PATH}/config.h"
     )
+
+
 # #define TIME_LEVEL 400
-def change_time_level(num:int):
+def change_time_level(num: int):
     run_command(
         f"sed -i 's/^#define TIME_LEVEL.*/#define TIME_LEVEL {num}/' {HOME_PATH}/config.h"
     )
@@ -203,10 +213,10 @@ def run_with_random_config():
     random_config_list = gen_cmd_config_list(50000)
     # 添加进度条
     for config in tqdm(random_config_list):
-        run_with_config_once(config,"data/map41_random.csv")
+        run_with_config_once(config, "data/map41_random.csv")
 
 
-def run_with_config_once(config: CmdConfig,csv_path:str):
+def run_with_config_once(config: CmdConfig, csv_path: str):
     # 重新编译程序
     change_max_robot_num(config.max_robot_num)
     change_max_ship_num(config.max_ship_num)
@@ -249,38 +259,40 @@ def run_with_config_once(config: CmdConfig,csv_path:str):
             f.write(
                 "rand_seed,map_name,robot_num,ship_num,time_level,ship_capcity,score,total_value,goted_value,selled_value,total_num,goted_num,selled_num\n"
             )
-        
+
         f.write(
             f"{config.rand_seed},{map_name},{max_score_info.robot_num},{max_score_info.ship_num},{config.time_level},{max_score_info.ship_capacity},{max_score},{max_score_info.total_goods_money},{max_score_info.goted_goods_money},{max_score_info.selled_goods_money},{max_score_info.total_goods_num},{max_score_info.goted_goods_num},{max_score_info.selled_goods_num}\n"
         )
 
-def find_best_config(config:CmdConfig):
+
+def find_best_config(config: CmdConfig):
     map_name = os.path.basename(config.map_path)
     best_score = 0
     best_robot_num = 12
     best_ship_num = 1
-    
+
     target_program = os.path.join(HOME_PATH, "build", "main")
     config_list = list()
     for robot_num in range(12, 21):
         for ship_num in range(1, 3):
             for time_level in range(100, 501, 100):
                 print(f"robot_num:{robot_num},ship_num:{ship_num}")
-                config_list.append(CmdConfig(config.map_path, config.rand_seed, robot_num, ship_num,time_level))
-    
+                config_list.append(
+                    CmdConfig(
+                        config.map_path,
+                        config.rand_seed,
+                        robot_num,
+                        ship_num,
+                        time_level,
+                    )
+                )
+
     csv_name = f"data/{config.rand_seed}-{map_name}.csv"
     for config in tqdm(config_list):
-        run_with_config_once(config,csv_name)
-    
-    
-    
-    
-            
-
-    
+        run_with_config_once(config, csv_name)
 
 
-def new_benchmark(map_seed:int):
+def new_benchmark(map_seed: int):
     rm_replay_dir()
     target_program = os.path.join(HOME_PATH, "build", "main")
     # 721423:82
@@ -364,14 +376,13 @@ def new_benchmark(map_seed:int):
 
 
 if __name__ == "__main__":
-    new_benchmark(2973400933)
-    # seed_list = random.sample(range(0, 0xFFFFFFFE), 1000)
-    
-    # for seed in seed_list:
-    #     for map_path in semi_maps_list:
-    #         for time_level in range(100, 501, 100):
-    #             config = CmdConfig(os.path.join(HOME_PATH,map_path),seed,12,1,time_level)
-    #             find_best_config(config)
-    
-    # config1 = CmdConfig(os.path.join(HOME_PATH,semi_maps_list[2]),991156464,12,1)
-    # find_best_config(config1)
+    # new_benchmark(2973400933)
+    seed_list = random.sample(range(0, 0xFFFFFFFE), 1000)
+
+    for seed in seed_list:
+        for map_path in semi_maps_list:
+            for time_level in range(100, 501, 100):
+                config = CmdConfig(
+                    os.path.join(HOME_PATH, map_path), seed, 12, 1, time_level
+                )
+                find_best_config(config)

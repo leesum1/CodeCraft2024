@@ -66,7 +66,9 @@ public:
     void printf_cur_value() {
         fprintf(stderr, "ship[%d] fsm:%d, cur_num:%d,  cur_value:%d path size:%ld \n", this->id, static_cast<int>(this->fsm),this->cur_capacity, this->cur_value(),path.size());
     }
-
+    bool in_berth_point_id_list(const int berth_id) {
+        return berth_id==target_berth_id ||  std::find(berth_point_id.begin(), berth_point_id.end(), berth_id) != berth_point_id.end();
+    }
 
     void start_new_transport(const int cur_cycle, const int start_delivery_id,
                              const std::vector<int>& new_berth_loop_id) {

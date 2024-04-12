@@ -4,6 +4,7 @@ replay/
 maps/
 maps41/
 data/
+data-back/
 build/
 .*/
 cmake-build-debug/

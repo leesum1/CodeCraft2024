@@ -33,37 +33,25 @@ public:
 
     std::function<int(const RobotControl::GoodsInfo&)> get_goods_strategy_lambda(const int robot_id) const {
         // if (robot_id == 0) {
-        //     auto quality_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
-        //         return RobotControl::goods_strategy_quality_first(goods_info, false);
-        //     };
+
         //     return quality_strategy;
         // }
-
-        // if (robot_id <  1) {
-        //     auto dis_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
-        //         return RobotControl::goods_strategy_distance_first(goods_info, false);
-        //     };
-        //     return dis_strategy;
-        // }
-
-        // if(io_layer.robots.size() < expect_robot_num){
-        //     auto quality_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
-        //         return RobotControl::goods_strategy_quality_first(goods_info, true);
-        //     };
-        //     return quality_strategy;
-        // }
-
-        // if(io_layer.remain_cycle() <1000){
-        //     auto quality_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
-        //         return RobotControl::goods_strategy_quality_first(goods_info, true);
-        //     };
-        //     return quality_strategy;
-        // }
-
-
-        auto time_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
+        static auto dis_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
+            return RobotControl::goods_strategy_distance_first(goods_info, false);
+        };
+        static auto quality_strategy = [](const RobotControl::GoodsInfo &goods_info) -> int {
+            return RobotControl::goods_strategy_quality_first(goods_info, false);
+        };
+        static auto time_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
             return RobotControl::goods_strategy_remain_time_first(goods_info, true);
         };
+        
+        if(io_layer.remain_cycle() < 1200){
+            return quality_strategy;
+        }
+
+
+
         return time_strategy;
     }
 
@@ -221,25 +209,42 @@ public:
     }
 
     void berth_cycle() {
-        int remain_robot_num = 0;
-        for (auto& berth : io_layer.berths) {
-            if (!io_layer.berth_is_ocuppied(berth.id) && !berth.can_arrive_at_next_time(io_layer.cur_cycle) && berth.
-                max_robot_num != 0) {
-                remain_robot_num += berth.max_robot_num;
-                berth.max_robot_num = 0;
-                log_info("cycle[%d] berth[%d] will not arrive at next time, should close", io_layer.cur_cycle,
-                         berth.id);
-            }
-        }
-        // 重新分配机器人
-        if (remain_robot_num != 0) {
+        for (auto & ship : io_layer.ships) {
             for (auto& berth : io_layer.berths) {
-                if (berth.max_robot_num != 0) {
-                    berth.max_robot_num += remain_robot_num;
+                if(ship.in_berth_point_id_list(berth.id)){
+                    continue;
+                }
+                if(io_layer.berth_had_other_ship(ship.id, berth.id)){
+                    continue;
+                }
+                if (berth.max_robot_num == 0) {
+                    continue;
+                }
+                if(io_layer.is_last_berth(berth.id)){
+                    continue;
+                }
+
+            
+                const auto ship_trap_info = io_layer.get_ship_trap_info(ship);
+
+                const auto final_delivery_pos = io_layer.delivery_points.at(ship_trap_info.target_delivery_id);
+                const auto to_berth_cost = io_layer.berths_come_from_for_ship[berth.id].get_point_cost(final_delivery_pos);
+                if (!to_berth_cost.has_value()) {
+                    continue;
+                }
+                const auto [_, to_delivery_cost] = io_layer.get_minimum_delivery_point_cost_for_ship(berth.pos);
+
+                const int cur_berth_trap_cost = ship_trap_info.remained_cycle+to_berth_cost.value()+to_delivery_cost;
+                if (io_layer.remain_cycle() < cur_berth_trap_cost+30) {
+                    log_info("cycle[%d] berth[%d] will not arrive at next time, should close", io_layer.cur_cycle,
+                             berth.id);
+                    io_layer.reassign_robot_to_berth(berth.max_robot_num);
+                             berth.max_robot_num = 0;
                 }
             }
         }
     }
+
 
 
     void run_game() {

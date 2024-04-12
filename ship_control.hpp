@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <asm-generic/errno.h>
 #include <optional>
 #include <utility>
 #include "direction.hpp"
@@ -57,7 +58,7 @@ public:
         int berth_id = get_random_berth_id(ship);
         int max_value = 0;
         for (auto& info : berth_infos) {
-            if (io_layer->berth_had_other_ship(ship.id, info.berth_id)) {
+            if (io_layer->berth_in_other_ship_berth_list(ship.id, info.berth_id)) {
                 continue;
             }
             if (info.goods_value >= max_value) {
@@ -294,12 +295,18 @@ public:
 
     bool set_next_target_berth(Ship& ship) {
         while (!ship.berth_point_id.empty()) {
-            if (!io_layer->berth_had_other_ship(ship.id, ship.berth_point_id.front())) {
+            if(io_layer->berth_had_other_ship(ship.id, ship.berth_point_id.front())){
+                ship.berth_point_id = Tools::vector_to_list(io_layer->get_best_berth_list_v2(ship));
+                log_info("cycle[%d],ship[%d] berth_point_id had other ship, change to new list", io_layer->cur_cycle,ship.id);
+                if (ship.berth_point_id.empty()) {
+                    return false;
+                }
+            }
+            log_assert(!io_layer->berth_had_other_ship(ship.id, ship.berth_point_id.front()), "ship[%d] berth[%d] had other ship",
+                       ship.id, ship.berth_point_id.front());
                 ship.set_target_berth_id(ship.berth_point_id.front());
                 ship.berth_point_id.pop_front();
                 return true;
-            }
-            ship.berth_point_id.pop_front();
         }
 
 
@@ -483,8 +490,7 @@ public:
         int remained_cycle = 0;
         auto cur_pos = ship.pos;
         for (const auto& berth_id : ship.berth_point_id) {
-            const int to_berth_distance = io_layer->berths_come_from_for_ship.at(berth_id).get_point_cost(cur_pos).
-                                                    value_or(20000);
+            const int to_berth_distance = io_layer->berths_come_from_for_ship.at(berth_id).get_point_cost(cur_pos).value_or(20000);
             cur_pos = io_layer->berths[berth_id].pos;
             remained_cycle += to_berth_distance;
             remained_cycle += 20; // 预估停靠时间
@@ -494,7 +500,7 @@ public:
         cur_pos = io_layer->delivery_points[deliver_id];
         const auto [berth_id, to_berth_distance] = io_layer->get_minimum_berth_cost_for_ship(cur_pos);
 
-        bool can_start_new_trap = io_layer->remain_cycle() > (remained_cycle + to_berth_distance + 10);
+        bool can_start_new_trap = io_layer->remain_cycle() > (remained_cycle + to_berth_distance*2+20);
 
 
         return {can_start_new_trap, remained_cycle};
@@ -519,11 +525,25 @@ public:
         }
         if (cur_berth.is_empty()) {
             const auto [can_start_new_trap, trap_remained_cycle] = ship_trap_remained_cycle(ship);
-            if (!can_start_new_trap && io_layer->remain_cycle() > trap_remained_cycle) {
-                log_trace("cycle[%d],ship[%d] can not start new trap, trap_remained_cycle:%d, remain_cycle:%d",
-                          io_layer->cur_cycle, ship.id,
-                          trap_remained_cycle, io_layer->remain_cycle());
-                return;
+            auto & ship_target_berth = io_layer->berths[ship.target_berth_id];
+            if (!can_start_new_trap && !io_layer->berth_is_ocuppied_by_other_ship(ship.id, ship_target_berth.id)) {
+                const int remain_robot_num = ship_target_berth.max_robot_num;
+                if(remain_robot_num!=0){
+                    const int remain_cycle = io_layer->remain_cycle() - (trap_remained_cycle+ship.berth_point_id.size()*10);
+                    if(remain_cycle <=0 ){
+                        // if(!io_layer->berth_in_other_ship_berth_list(ship.id,ship_target_berth.id )){
+                                                    log_trace("cycle[%d],ship[%d] cur_berth[%d],  can not start new trap, trap_remained_cycle:%d, remain_cycle:%d,berth size:%d",
+                            io_layer->cur_cycle, ship.id,ship_target_berth.id,
+                        trap_remained_cycle, io_layer->remain_cycle(),ship.berth_point_id.size());
+                        // ship_target_berth.max_robot_num = 0;
+                        // io_layer->reassign_robot_to_berth(remain_robot_num);
+                        // // }
+
+                    }else {
+                        // 在港口等待
+                        return;
+                    }
+                }
             }
 
             if (ship.berth_point_id.empty()) {

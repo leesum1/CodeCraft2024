@@ -48,9 +48,9 @@ def gen_cmd_config_list(count: int) -> list[CmdConfig]:
         map_path = os.path.join(HOME_PATH, random.choice(semi_maps_list))
         max_robot_num = random.randint(12, 20)
         max_ship_num = random.randint(1, 2)
-        cmd_config = CmdConfig(map_path, rand_seed, max_robot_num, max_ship_num)
-        cmd_config_list.append(cmd_config)
         time_level = random.randint(100, 500)
+        cmd_config = CmdConfig(map_path, rand_seed, max_robot_num, max_ship_num,time_level)
+        cmd_config_list.append(cmd_config)
     return cmd_config_list
 
 
@@ -213,7 +213,7 @@ def run_with_random_config():
     random_config_list = gen_cmd_config_list(50000)
     # 添加进度条
     for config in tqdm(random_config_list):
-        run_with_config_once(config, "data/map41_random.csv")
+        run_with_config_once(config, "data/map41_random_4_13.csv")
 
 
 def run_with_config_once(config: CmdConfig, csv_path: str):
@@ -377,12 +377,4 @@ def new_benchmark(map_seed: int):
 
 if __name__ == "__main__":
     # new_benchmark(2973400933)
-    seed_list = random.sample(range(0, 0xFFFFFFFE), 1000)
-
-    for seed in seed_list:
-        for map_path in semi_maps_list:
-            for time_level in range(100, 501, 100):
-                config = CmdConfig(
-                    os.path.join(HOME_PATH, map_path), seed, 12, 1, time_level
-                )
-                find_best_config(config)
+    run_with_random_config()

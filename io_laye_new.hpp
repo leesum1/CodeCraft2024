@@ -48,6 +48,7 @@ private:
         CommandInst inst;
         int arg1;
         int arg2;
+        int arg3;
     };
 
 public:
@@ -78,6 +79,7 @@ public:
     int new_goods_num = 0; // 新增货物数量
     int cur_cycle = 0; // 当前周期
     int cur_money = 0; // 当前金钱
+    int last_robot_good_num = 1;
 
     bool final_time = false; // 到最后的时间后,机器人之往指定的港口运输货物
 
@@ -188,8 +190,8 @@ public:
      * @return
      */
     int calc_max_ship_num() const {
-        const double ship_max_num = berth_avg_delivery_point_cost / (ship_capacity * 1.4);
-        return std::max(1, static_cast<int>(ship_max_num));
+        const double ship_max_num =  berth_avg_delivery_point_cost / (ship_capacity * 1.4);
+        return std::max(1,  std::min(2, static_cast<int>(ship_max_num)));
     }
 
     /**
@@ -209,11 +211,11 @@ public:
         }
         else if (area_rate > 0.45) {
             // 45%-55%
-            robot_num += 4;
+            robot_num += 3;
         }
         else if (area_rate > 0.30) {
             // 30%-45%
-            robot_num += 6;
+            robot_num += 5;
         }
         else {
             // 30% 以下
@@ -805,6 +807,9 @@ public:
         // 主航道（非碰撞区域）的花费为 2
         auto ship_cost = [&](const Point& p) {
             if (game_map.has_collision_effect_for_ship(p)) {
+                if(game_map.near_points_is_main_sea_for_ship(p)){
+                    return 2;
+                }
                 return 1;
             }
             else {
@@ -1298,11 +1303,13 @@ public:
             if (std::find_if(robots.begin(), robots.end(), [&id](const Robot& r) { return r.id == id; }) == robots.
                 end()) {
                 robots.emplace_back(id, Point(x, y), goods == 1, 1);
+                robots.back().max_goods_num = last_robot_good_num;
                 log_info("new robot[%d](%d,%d),goods:%d", i, x, y, goods);
                 continue;
             }
             // 更新老的机器人
-            robots[i].had_goods = goods == 1;
+            robots[i].had_goods = goods != 0;
+            robots[i].goods_num = goods;
             robots[i].pos = Point(x, y);
             robots[i].status = 1;
             log_info("robot[%d](%d,%d),goods:%d", i, x, y, goods);
@@ -1355,7 +1362,7 @@ public:
                 std::sprintf(fmt_buf, "pull %d\n", command.arg1);
                 break;
             case ROBOT_LBOT:
-                std::sprintf(fmt_buf, "lbot %d %d\n", command.arg1, command.arg2);
+                std::sprintf(fmt_buf, "lbot %d %d %d\n", command.arg1, command.arg2, command.arg3);
                 break;
             case SHIP_MOVE:
                 std::sprintf(fmt_buf, "ship %d\n", command.arg1);
@@ -1364,7 +1371,7 @@ public:
                 std::sprintf(fmt_buf, "rot %d %d\n", command.arg1, command.arg2);
                 break;
             case SHIP_LBOAT:
-                std::sprintf(fmt_buf, "lboat %d %d\n", command.arg1, command.arg2);
+                std::sprintf(fmt_buf, "lboat %d %d \n", command.arg1, command.arg2);
                 break;
             case SHIP_DEPT:
                 std::sprintf(fmt_buf, "dept %d\n", command.arg1);
@@ -1395,20 +1402,20 @@ public:
         this->robot_move(robot_id, Direction::calc_direction(robots[robot_id].pos, to));
     }
 
-    void robot_get(int robot_id) { commands.push_back({ROBOT_GET, robot_id, 0}); }
+    void robot_get(int robot_id) { commands.push_back({ROBOT_GET, robot_id, 0,0}); }
 
-    void robot_pull(int robot_id) { commands.push_back({ROBOT_PULL, robot_id, 0}); }
+    void robot_pull(int robot_id) { commands.push_back({ROBOT_PULL, robot_id, 0,0}); }
 
-    void robot_lbot(const Point& pos) { commands.push_back({ROBOT_LBOT, pos.x, pos.y}); }
+    void robot_lbot(const Point& pos,int type) { commands.push_back({ROBOT_LBOT, pos.x, pos.y,type}); }
 
     // ------------------------------------------
     // 船只指令
     // ------------------------------------------
-    void ship_move(const int ship_id) { commands.push_back({SHIP_MOVE, ship_id, 0}); }
+    void ship_move(const int ship_id) { commands.push_back({SHIP_MOVE, ship_id, 0,0}); }
 
-    void ship_dept(const int ship_id) { commands.push_back({SHIP_DEPT, ship_id, 0}); }
+    void ship_dept(const int ship_id) { commands.push_back({SHIP_DEPT, ship_id, 0,0}); }
 
-    void ship_berth(const int ship_id) { commands.push_back({SHIP_BERTH, ship_id, 0}); }
+    void ship_berth(const int ship_id) { commands.push_back({SHIP_BERTH, ship_id, 0,0}); }
 
     // 0表示顺时针方向，1表示逆时针方向
     void ship_rot(const int ship_id, const int rot_direction) {
@@ -1416,7 +1423,7 @@ public:
         commands.push_back({SHIP_ROT, ship_id, rot_direction});
     }
 
-    void ship_lboat(const Point& pos) { commands.push_back({SHIP_LBOAT, pos.x, pos.y}); }
+    void ship_lboat(const Point& pos) { commands.push_back({SHIP_LBOAT, pos.x, pos.y,0}); }
 
     bool is_valid_move(const Point& from, const Point& to) {
         if (from.x < 0 || from.x >= 200 || from.y < 0 || from.y >= 200) {

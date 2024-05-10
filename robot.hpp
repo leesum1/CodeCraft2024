@@ -14,6 +14,8 @@ public:
   bool had_goods; // 机器人是否有货物
   int status; // 机器人状态
   int target_berth_id = -1; // 机器人目标泊位编号
+  int goods_num = 0;
+  int max_goods_num = 1;
 
   // 额外信息
   Point next_pos_before_collision_check = invalid_point; // 下一次移动的位置
@@ -22,6 +24,7 @@ public:
   bool will_goods_in_this_cycle = false; // 本周期是否拿货
   bool has_pass_collision_check = false; // 是否已经通过碰撞检测
   Goods target_goods = invalid_goods; // 机器人目标货物
+  Goods second_target_goods = invalid_goods;
   int priority = 0; // 机器人优先级
   int idle_cycle = 0;
   int collision_cycle = 0;
@@ -35,6 +38,10 @@ public:
     this->had_goods = false;
     this->status = 0;
     this->target_berth_id = -1;
+  }
+
+  bool goods_full() const{
+    return goods_num == max_goods_num;
   }
 
   void pull_goods_statistic(const Goods& goods) {
@@ -84,12 +91,29 @@ public:
     next_pos_before_collision_check = invalid_point;
   }
 
+  bool can_go_berth(){
+    const bool cond2 = goods_num == (max_goods_num-1) && will_goods_in_this_cycle;
+    const bool cond1 = goods_full();
+    return cond1 || cond2;
+  }
+
 
   void book_new_goods(const Goods& goods, const std::vector<Point>& path) {
-    target_goods = goods;
-    target_goods.status = GoodsStatus::Booked;
+    if(goods_num ==0 && !will_goods_in_this_cycle){
+      target_goods = goods;
+      target_goods.status = GoodsStatus::Booked;
+    } else{
+      second_target_goods = goods;
+      second_target_goods.status = GoodsStatus::Booked;
+    }
+
     path_list = path;
     next_pos_before_collision_check = path_list.back();
+  }
+
+  void clear_goods(){
+    target_goods = invalid_goods;
+    second_target_goods = invalid_goods;
   }
 
   void update_next_pos() {

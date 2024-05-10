@@ -14,9 +14,8 @@ SDK_PATH = "/home/leesum/Documents/huawei_soft2024/linux"
 JUGDE_PROG = os.path.join(SDK_PATH, "SemiFinalJudge")
 
 semi_maps_list = [
-    "maps41/map1.txt",
-    "maps41/map2.txt",
-    "maps41/map3.txt",
+    "maps/map1.txt",
+    "maps/map2.txt",
 ]
 
 
@@ -273,9 +272,9 @@ def find_best_config(config: CmdConfig):
 
     target_program = os.path.join(HOME_PATH, "build", "main")
     config_list = list()
-    for robot_num in range(12, 21):
+    for robot_num in range(10, 21):
         for ship_num in range(1, 3):
-            for time_level in range(100, 501, 100):
+            # for time_level in range(100, 501, 100):
                 print(f"robot_num:{robot_num},ship_num:{ship_num}")
                 config_list.append(
                     CmdConfig(
@@ -283,7 +282,7 @@ def find_best_config(config: CmdConfig):
                         config.rand_seed,
                         robot_num,
                         ship_num,
-                        time_level,
+                        200,
                     )
                 )
 
@@ -376,5 +375,6 @@ def new_benchmark(map_seed: int):
 
 
 if __name__ == "__main__":
-    # new_benchmark(2973400933)
-    run_with_random_config()
+    new_benchmark(2249455883)
+    # run_with_random_config()
+    # find_best_config(CmdConfig("maps/map2.txt", 2249455883, 12, 1, 100))

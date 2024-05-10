@@ -23,7 +23,6 @@ public:
     RobotCollisionAvoid robot_collision_avoid{&io_layer};
     ShipControl ship_control{&io_layer};
     RobotControl robot_control{&io_layer};
-
     ManagerNew() = default;
 
     ~ManagerNew() = default;
@@ -45,14 +44,13 @@ public:
         static auto time_strategy = [](const RobotControl::GoodsInfo& goods_info) -> int {
             return RobotControl::goods_strategy_remain_time_first(goods_info, true);
         };
+
+
         
         if(io_layer.remain_cycle() < 1200){
             return quality_strategy;
         }
-
-
-
-        return time_strategy;
+        return quality_strategy;
     }
 
     void goods_list_cycle() {
@@ -167,30 +165,54 @@ public:
         max_robot_num = MAX_ROBOT_NUM;
         max_ship_num = MAX_SHIP_NUM;
 #endif
-
+        // if(io_layer.robot_shops_come_from.front().map_size() == 32552){
+        // max_robot_num = 15;
+        //     max_ship_num = 1;
+        // }else if(io_layer.robot_shops_come_from.front().map_size() == 31518) {
+        //  max_robot_num = 13;
+        //     max_ship_num = 2;
+        // }else{
+        //     max_robot_num = 18;
+        //     max_ship_num = 1;
+        // }
+ 
         log_assert(io_layer.robots.size() <= max_robot_num, "robot num:%d", io_layer.robots.size());
+        const int max_big_robot_num = 0;
+        const int max_small_robot_num = max_robot_num - max_big_robot_num*2;
+        const int max_all_robot_num = max_big_robot_num + max_small_robot_num;
 
-        if (io_layer.robots.size() < max_robot_num && io_layer.cur_money > io_layer.robot_price) {
+
+        if (io_layer.robots.size() < max_small_robot_num && io_layer.cur_money > io_layer.robot_price) {
             const auto rand_robot_shop = io_layer.robot_shops.at(Tools::random(0ul, io_layer.robot_shops.size() - 1));
-            io_layer.robot_lbot(rand_robot_shop);
-
+            io_layer.robot_lbot(rand_robot_shop,0);
+            io_layer.last_robot_good_num = 1;
+            if (io_layer.robots.size() + 1 == max_robot_num) {
+                log_info("robot max num [%d] at cycle :%d", io_layer.robots.size()+1, io_layer.cur_cycle);
+            }
+        } else if (io_layer.robots.size() >= max_small_robot_num&&io_layer.robots.size() < max_all_robot_num && io_layer.cur_money >= 5000) {
+            const auto rand_robot_shop = io_layer.robot_shops.at(Tools::random(0ul, io_layer.robot_shops.size() - 1));
+            io_layer.robot_lbot(rand_robot_shop,1);
+            io_layer.last_robot_good_num = 2;
             if (io_layer.robots.size() + 1 == max_robot_num) {
                 log_info("robot max num [%d] at cycle :%d", io_layer.robots.size()+1, io_layer.cur_cycle);
             }
         }
+
+
+
         if (io_layer.cur_cycle == 1) {
             io_layer.ship_lboat(io_layer.ship_shops.back());
         }
         if (io_layer.ships.size() < max_ship_num && io_layer.cur_money > io_layer.ship_price &&
-            io_layer.robots.size() == max_robot_num) {
-            if (io_layer.statistic.goted_goods_count() - io_layer.statistic.selled_goods_count() >
-                io_layer.ship_capacity * (io_layer.ships.size() + 2)) {
+            io_layer.robots.size() == max_all_robot_num) {
+            // if (io_layer.statistic.goted_goods_count() - io_layer.statistic.selled_goods_count() >
+            //     io_layer.ship_capacity * (io_layer.ships.size() + 2)) {
                 const auto rand_ship_shop = io_layer.ship_shops.at(Tools::random(0ul, io_layer.ship_shops.size() - 1));
                 io_layer.ship_lboat(rand_ship_shop);
                 if (io_layer.ships.size() == max_ship_num) {
                     log_info("ship max num at[%d] cycle :%d", io_layer.ships.size(), io_layer.cur_cycle);
                 }
-            }
+            // }
         }
     }
 
@@ -266,6 +288,7 @@ public:
                 }
                 robot_control.robot_get_goods(robot);
                 robot_control.find_new_goods(robot, get_goods_strategy_lambda(robot.id));
+                robot_control.find_second_goods(robot);
                 robot_control.go_near_berth(robot);
             }
 
@@ -303,7 +326,7 @@ public:
                 ship.clear_flags();
             }
             for (auto& ship : io_layer.ships) {
-                if (io_layer.cur_cycle < 400 || ship.can_operate() == false) {
+                if (io_layer.cur_cycle < io_layer.ship_capacity*10 || ship.can_operate() == false) {
                     continue;
                 }
                 ship_control.sell_goods_and_new_transport(ship);

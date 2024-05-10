@@ -1,13 +1,13 @@
 
-SDK_PATH = /home/leesum/Documents/huawei_soft2024/linux
+SDK_PATH = /home/leesum/Documents/huawei_soft2024/LinuxRelease
 JUGDE_PROG = $(SDK_PATH)/SemiFinalJudge
-REPLAYER_PROG = $(SDK_PATH)/replayer/CodeCraft_2024_Replayer_v2.x86_64
+REPLAYER_PROG = $(SDK_PATH)/replayer/CodeCraft_2024_Replayer_linux_semifinal/CodeCraft_2024_Replayer_v2.x86_64
 
-MAP_PATH = ./maps41
+MAP_PATH = ./maps
 
 
-RAND_SEED = 2533615387
-MAP_SEL := map3.txt
+RAND_SEED = 2249455883
+MAP_SEL := map1.txt
 TARGET = $(PWD)/build/main
 # 获取时间戳
 TIMESTAMP = $(shell date +%s)

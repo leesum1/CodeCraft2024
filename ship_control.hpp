@@ -251,6 +251,11 @@ public:
         if (in_main_sea_count != 1) {
             return;
         }
+        ship.helf_sea_cycle++;
+        if(ship.helf_sea_cycle <2){
+            return;
+        }
+        ship.helf_sea_cycle = 0;
 
         log_trace("ship[%d] half_main_sea_avoid", ship.id);
 
@@ -529,7 +534,7 @@ public:
             if (!can_start_new_trap && !io_layer->berth_is_ocuppied_by_other_ship(ship.id, ship_target_berth.id)) {
                 const int remain_robot_num = ship_target_berth.max_robot_num;
                 if(remain_robot_num!=0){
-                    const int remain_cycle = io_layer->remain_cycle() - (trap_remained_cycle+ship.berth_point_id.size()*10);
+                    const int remain_cycle = io_layer->remain_cycle() - (trap_remained_cycle+ship.berth_point_id.size()*20);
                     if(remain_cycle <=0 ){
                         // if(!io_layer->berth_in_other_ship_berth_list(ship.id,ship_target_berth.id )){
                                                     log_trace("cycle[%d],ship[%d] cur_berth[%d],  can not start new trap, trap_remained_cycle:%d, remain_cycle:%d,berth size:%d",

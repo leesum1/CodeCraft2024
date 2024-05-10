@@ -4,6 +4,7 @@
 
 #include "log.h"
 #include "point.hpp"
+#include <algorithm>
 #include <random>
 #include <unordered_map>
 #include <utility>
@@ -145,6 +146,16 @@ public:
                         .second.has_collison_effect_for_ship;
     }
     return true;
+  }
+  bool near_points_is_main_sea_for_ship(const Point& pos){
+    if(is_valid_pos(pos)){
+      const auto neighbers = neighbors_for_ship(pos);
+      const auto flag = std::any_of(neighbers.begin(),neighbers.end(),[&](const Point&p){
+        return  !has_collision_effect_for_ship(p);
+      });
+      return flag;
+    }
+    return false;
   }
 
   void rand_neighber_again() {

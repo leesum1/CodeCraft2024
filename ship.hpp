@@ -62,6 +62,7 @@ public:
     // 一些状态位置
     std::vector<Goods> goods_list{}; // 货物列表
     int start_cycle = 0; // 开始运输货物的起始时间, 当到达交货点时, 会更新为当前周期
+    int helf_sea_cycle = 0;
 
     void printf_cur_value() {
         fprintf(stderr, "ship[%d] fsm:%d, cur_num:%d,  cur_value:%d path size:%ld \n", this->id, static_cast<int>(this->fsm),this->cur_capacity, this->cur_value(),path.size());
